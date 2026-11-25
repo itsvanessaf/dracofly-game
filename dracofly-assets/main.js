@@ -461,7 +461,7 @@ let pipes = {
             if (!pg.passed && pg.x + this.w < dragon.x) {
                 pg.passed = true
                 score.current++
-                score.coins += 2
+                score.updateBest()
                 SFX_SCORE.play()
             }
 
@@ -629,14 +629,22 @@ let ground = {
     }
 }
 
-// 4. HUD ATAS: SCORE, Health Bar + Heart, ROYAL GOLD
+// 4. HUD ATAS: SCORE, BEST SCORE
 let score = {
     current: 0,
-    coins: 0,
+    best: parseInt(localStorage.getItem('royalDragonHighScore')) || 0,
+
     reset: function() {
         this.current = 0
-        this.coins = 0
     },
+
+    updateBest: function() {
+        if (this.current > this.best) {
+            this.best = this.current
+            localStorage.setItem('royalDragonHighScore', this.best)
+        }
+    },
+
     render: function() {
         ctx.fillStyle = '#1e272e'
         ctx.fillRect(0, 0, cvs.width, 30)
@@ -644,44 +652,11 @@ let score = {
         ctx.fillStyle = '#f1c40f'
         ctx.font = 'bold 18px "Courier New", monospace'
         ctx.textAlign = 'left'
+        
         let formattedScore = String(this.current).padStart(3, '0')
-        ctx.fillText('SCORE: ' + formattedScore, 20, 21)
-
-        // Kotak Ikon Hati Merah
-        ctx.fillStyle = '#2f3640'
-        ctx.fillRect(20, 36, 24, 22)
-        ctx.strokeStyle = '#f1c40f'
-        ctx.lineWidth = 1.5
-        ctx.strokeRect(20, 36, 24, 22)
-
-        ctx.fillStyle = '#e84118'
-        ctx.beginPath()
-        ctx.arc(29, 45, 4, 0, Math.PI * 2)
-        ctx.arc(35, 45, 4, 0, Math.PI * 2)
-        ctx.moveTo(25, 46)
-        ctx.lineTo(32, 54)
-        ctx.lineTo(39, 46)
-        ctx.fill()
-
-        // Health Bar Merah
-        ctx.fillStyle = '#2f3640'
-        ctx.fillRect(48, 40, 100, 14)
-        ctx.strokeRect(48, 40, 100, 14)
-        let hpWidth = gameState.current === gameState.gameOver ? 0 : 72
-        ctx.fillStyle = '#e84118'
-        ctx.fillRect(50, 42, hpWidth, 10)
-
-        // Koin Emas Kerajaan
-        ctx.fillStyle = '#f1c40f'
-        ctx.beginPath()
-        ctx.arc(cvs.width - 138, 15, 8, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.strokeStyle = '#b7950b'
-        ctx.stroke()
-
-        ctx.fillStyle = '#ffffff'
-        ctx.textAlign = 'right'
-        ctx.fillText('GOLD: ' + this.coins, cvs.width - 20, 21)
+        let formattedBest = String(this.best).padStart(3, '0')
+        
+        ctx.fillText('SCORE: ' + formattedScore + '  |  BEST: ' + formattedBest, 20, 21)
     }
 }
 
