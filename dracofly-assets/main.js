@@ -57,6 +57,58 @@ function playSFX(sfx) {
     })
 }
 
+// Background Music (BGM) Main Menu & Gameplay
+const BGM_MENU = new Audio('audio/Medieval Vol. 2 7.mp3')
+const BGM_GAMEPLAY = new Audio('audio/Medieval Vol. 2 3.mp3')
+
+BGM_MENU.preload = 'auto'
+BGM_GAMEPLAY.preload = 'auto'
+BGM_MENU.loop = true
+BGM_GAMEPLAY.loop = true
+
+// Atur volume BGM lebih rendah agar efek suara (SFX) tetap terdengar jelas
+BGM_MENU.volume = 0.45
+BGM_GAMEPLAY.volume = 0.40
+
+function playMenuBGM() {
+    BGM_GAMEPLAY.pause()
+    BGM_GAMEPLAY.currentTime = 0
+    if (BGM_MENU.paused) {
+        BGM_MENU.play().catch(() => {})
+    }
+}
+
+function playGameplayBGM() {
+    BGM_MENU.pause()
+    BGM_MENU.currentTime = 0
+    BGM_GAMEPLAY.currentTime = 0
+    BGM_GAMEPLAY.play().catch(() => {})
+}
+
+function stopAllBGM() {
+    BGM_MENU.pause()
+    BGM_MENU.currentTime = 0
+    BGM_GAMEPLAY.pause()
+    BGM_GAMEPLAY.currentTime = 0
+}
+
+// Jalankan musik Main Menu saat halaman dibuka (dengan fallback klik pertama untuk kebijakan autoplay browser)
+window.addEventListener('load', () => {
+    if (gameState.current === gameState.startScreen) {
+        playMenuBGM()
+    }
+})
+
+function unlockMenuAudioOnFirstInput() {
+    if (gameState.current === gameState.startScreen && BGM_MENU.paused) {
+        playMenuBGM()
+    }
+    window.removeEventListener('pointerdown', unlockMenuAudioOnFirstInput)
+    window.removeEventListener('keydown', unlockMenuAudioOnFirstInput)
+}
+window.addEventListener('pointerdown', unlockMenuAudioOnFirstInput)
+window.addEventListener('keydown', unlockMenuAudioOnFirstInput)
+
 const DRAGON_FLY_SHEET = new Image()
 DRAGON_FLY_SHEET.src = 'img/fly_10f_sheet.png'
 
@@ -67,7 +119,8 @@ const DRAGON_BREATH_SHEET = new Image()
 DRAGON_BREATH_SHEET.src = 'img/breath_48f_sheet.png'
 
 let gameState = {
-    current: 0,
+    current: -1,
+    gateScreen: -1,
     startScreen: 0,
     getReady: 1,
     play: 2,
@@ -94,7 +147,8 @@ let adScreen = {
             dragon.velocity = 0
             dragon.rotation = 0
             gameState.current = gameState.getReady
-            SFX_SWOOSH.play()
+            playSFX(SFX_SWOOSH)
+            playGameplayBGM()
         }
     },
 
@@ -188,6 +242,22 @@ let startButton = {
     getY: function() { return cvs.height / 2 - this.h / 2 },
 
     render: function() {
+    if (gameState.current === gameState.gateScreen) {
+            let centerX = cvs.width / 2
+            let centerY = cvs.height / 2
+
+            ctx.fillStyle = 'rgba(15, 20, 38, 0.78)'
+            ctx.fillRect(0, 0, cvs.width, cvs.height)
+
+            // Efek teks berkedip halus
+            if (Math.floor(frame / 25) % 2 === 0) {
+                ctx.fillStyle = '#ffffff'
+                ctx.font = 'bold 18px "Courier New", monospace'
+                ctx.fillText('[ KLIK LAYAR / TEKAN SPACE UNTUK MASUK ]', centerX, centerY + 25)
+            }
+            return
+        }
+
         if (gameState.current !== gameState.startScreen) return
 
         let x = this.getX()
@@ -619,6 +689,7 @@ let pipes = {
                 if (dTop < pg.gapY + 8 || dBottom > pg.gapY + this.gap - 8) {
                     score.loseLife()
                     playSFX(SFX_COLLISION)
+                    stopAllBGM()
                     return
                 }
             }
@@ -642,6 +713,7 @@ let pipes = {
             if (dist < dragon.r + cb.r - 2) {
                 score.loseLife()
                 playSFX(SFX_COLLISION)
+                stopAllBGM()
                 return
             }
         }
@@ -939,7 +1011,8 @@ let dragon = {
             }
         }
 
-        if (gameState.current == gameState.startScreen ||
+        if (gameState.current == gameState.gateScreen ||
+            gameState.current == gameState.startScreen ||
             gameState.current == gameState.getReady ||
             gameState.current == gameState.watchingAd) {
             this.y = (cvs.height * 0.45) + Math.sin(frame * 0.08) * 8
@@ -977,6 +1050,7 @@ let dragon = {
                 if (gameState.current == gameState.play) {
                     score.loseLife()
                     playSFX(SFX_FALL)
+                    stopAllBGM()
                 }
             }
 
@@ -1068,6 +1142,9 @@ function handleAction() {
     unlockAllAudio()
     if (gameState.current == gameState.getReady) {
         gameState.current = gameState.play
+        if (BGM_GAMEPLAY.paused) {
+            playGameplayBGM()
+        }
     }
     if (gameState.current == gameState.play) {
         dragon.flap()
@@ -1078,16 +1155,19 @@ function handleAction() {
         score.reset()
         gameState.current = gameState.getReady
         playSFX(SFX_SWOOSH)
+        playGameplayBGM()
     }
 }
 
-// Efek hover pointer untuk tombol START maupun tombol GAME OVER
+// Efek hover pointer untuk layar gerbang, tombol START, maupun tombol GAME OVER
 cvs.addEventListener('mousemove', (e) => {
     let rect = cvs.getBoundingClientRect()
     let mouseX = e.clientX - rect.left
     let mouseY = e.clientY - rect.top
 
-    if (gameState.current === gameState.startScreen) {
+    if (gameState.current === gameState.gateScreen) {
+        cvs.style.cursor = 'pointer'
+    } else if (gameState.current === gameState.startScreen) {
         let bx = startButton.getX()
         let by = startButton.getY()
         cvs.style.cursor = (mouseX >= bx && mouseX <= bx + startButton.w &&
@@ -1103,11 +1183,20 @@ cvs.addEventListener('mousemove', (e) => {
 })
 
 cvs.addEventListener('click', (e) => {
+    // 0. Layar Gerbang Awal -> Buka kunci audio & putar musik Main Menu
+    if (gameState.current == gameState.gateScreen) {
+        unlockAllAudio()
+        gameState.current = gameState.startScreen
+        playSFX(SFX_SWOOSH)
+        playMenuBGM()
+        return
+    }
+
     let rect = cvs.getBoundingClientRect()
     let clickX = e.clientX - rect.left
     let clickY = e.clientY - rect.top
 
-    // 1. Layar Main Menu
+    // 1. Layar Main Menu -> Masuk Gameplay
     if (gameState.current == gameState.startScreen) {
         let bx = startButton.getX()
         let by = startButton.getY()
@@ -1118,11 +1207,12 @@ cvs.addEventListener('click', (e) => {
             gameState.current = gameState.getReady
             cvs.style.cursor = 'default'
             playSFX(SFX_SWOOSH)
+            playGameplayBGM()
         }
         return
     }
 
-    // 2. Layar Game Over (Pilih Retry Nonton Iklan atau Kembali ke Home)
+    // 2. Layar Game Over (Pilih Continue Nonton Iklan atau Kembali ke Home)
     if (gameState.current == gameState.gameOver) {
         if (score.lives > 0 && gameOverButtons.isInside(clickX, clickY, gameOverButtons.getRetryRect())) {
             cvs.style.cursor = 'default'
@@ -1135,7 +1225,8 @@ cvs.addEventListener('click', (e) => {
             score.reset()
             cvs.style.cursor = 'default'
             gameState.current = gameState.startScreen
-            SFX_SWOOSH.play()
+            playSFX(SFX_SWOOSH)
+            playMenuBGM()
             return
         }
         return
@@ -1146,6 +1237,15 @@ cvs.addEventListener('click', (e) => {
 })
 
 document.body.addEventListener('keydown', (e) => {
+    if (gameState.current == gameState.gateScreen) {
+        e.preventDefault()
+        unlockAllAudio()
+        gameState.current = gameState.startScreen
+        playSFX(SFX_SWOOSH)
+        playMenuBGM()
+        return
+    }
+
     if (gameState.current == gameState.startScreen ||
         gameState.current == gameState.gameOver ||
         gameState.current == gameState.watchingAd) return
