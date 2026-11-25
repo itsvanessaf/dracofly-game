@@ -21,6 +21,14 @@ const SFX_FLAP = new Audio('audio/sfx_wing.wav')
 const SFX_COLLISION = new Audio('audio/sfx_hit.wav')
 const SFX_FALL = new Audio('audio/sfx_die.wav')
 const SFX_SWOOSH = new Audio('audio/sfx_swooshing.wav')
+const DRAGON_FLY_SHEET = new Image()
+DRAGON_FLY_SHEET.src = 'img/fly_10f_sheet.png'
+
+const DRAGON_DEATH_SHEET = new Image()
+DRAGON_DEATH_SHEET.src = 'img/death_66f_sheet.png'
+
+const DRAGON_BREATH_SHEET = new Image()
+DRAGON_BREATH_SHEET.src = 'img/breath_48f_sheet.png'
 
 let gameState = {
     current: 0,
@@ -685,122 +693,122 @@ let score = {
     }
 }
 
-// 5. PLAYER CHARACTER: NAGA KERAJAAN (Royal Dragon)
+// 5. PLAYER CHARACTER: FIRE DRAGON (Fly 10f, Breath 48f, Death 66f)
 let dragon = {
     fr: 0,
+    breathFrame: 24,
+    deathFrame: 0,
     x: Math.max(220, window.innerWidth * 0.25),
     y: window.innerHeight * 0.45,
-    r: 15,
+    r: 15,   // Radius hitbox inti badan naga
+    w: 128,  // Lebar tampilan sel (rasio 213:120)
+    h: 72,   // Tinggi tampilan sel
     fly: 6.2,
     gravity: 0.34,
     velocity: 0,
     rotation: 0,
     fireTimer: 0,
 
+    // Spesifikasi grid seragam untuk ketiga sheet (1704px / 8 kolom = 213px)
+    cellW: 213,
+    cellH: 120,
+    cols: 8,
+    flyTotalFrames: 10,
+    deathTotalFrames: 66,
+
     render: function() {
         ctx.save()
         ctx.translate(this.x, this.y)
-        ctx.scale(1.15, 1.15)
-        ctx.rotate(this.rotation)
+        ctx.imageSmoothingEnabled = false
 
+        // Efek garis angin saat melayang atau bermain
         if (gameState.current === gameState.play || gameState.current === gameState.getReady) {
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
             ctx.lineWidth = 1.5
             ctx.beginPath()
-            ctx.moveTo(-18, -6); ctx.quadraticCurveTo(-32, -2, -40, 8)
-            ctx.moveTo(-16, 8); ctx.quadraticCurveTo(-28, 14, -36, 18)
+            ctx.moveTo(-26, -6); ctx.quadraticCurveTo(-40, -2, -48, 8)
+            ctx.moveTo(-24, 8); ctx.quadraticCurveTo(-36, 14, -44, 18)
             ctx.stroke()
         }
 
-        // Semburan Api Emas Naga
-        if (this.fireTimer > 0) {
-            ctx.fillStyle = '#f39c12'
-            ctx.beginPath()
-            ctx.moveTo(16, 1)
-            ctx.lineTo(34 + Math.random() * 6, -4)
-            ctx.lineTo(30 + Math.random() * 6, 2)
-            ctx.lineTo(36 + Math.random() * 6, 7)
-            ctx.lineTo(16, 5)
-            ctx.closePath()
-            ctx.fill()
-        }
+        // Tentukan sprite sheet, nomor frame, dan pergeseran posisi badan
+        let activeSheet = DRAGON_FLY_SHEET
+        let frameIndex = this.fr
+        let offsetX = 0
 
-        // Ekor Naga Merah Kerajaan
-        ctx.fillStyle = '#c0392b'
-        ctx.beginPath()
-        ctx.moveTo(-10, 2); ctx.lineTo(-24, -3); ctx.lineTo(-18, 7)
-        ctx.closePath(); ctx.fill()
-
-        // Badan Naga
-        ctx.fillStyle = '#e74c3c'
-        ctx.strokeStyle = '#2c3e50'
-        ctx.lineWidth = 1.5
-        ctx.beginPath()
-        ctx.ellipse(-2, 2, 13, 9, 0, 0, Math.PI * 2)
-        ctx.fill(); ctx.stroke()
-
-        // Kepala Naga
-        ctx.beginPath()
-        ctx.roundRect(4, -8, 15, 13, 4)
-        ctx.fill(); ctx.stroke()
-
-        // Mahkota Emas Kecil di Kepala Naga
-        ctx.fillStyle = '#f1c40f'
-        ctx.beginPath()
-        ctx.moveTo(6, -8)
-        ctx.lineTo(7, -14)
-        ctx.lineTo(10, -10)
-        ctx.lineTo(13, -14)
-        ctx.lineTo(15, -8)
-        ctx.closePath()
-        ctx.fill()
-
-        // Mata Emas
-        ctx.fillStyle = '#fff200'
-        ctx.beginPath()
-        ctx.arc(13, -3, 2.5, 0, Math.PI * 2)
-        ctx.fill()
-
-        // Sayap Emas/Merah
-        ctx.fillStyle = '#f39c12'
-        ctx.beginPath()
-        if (this.fr === 0) {
-            ctx.moveTo(-2, -2); ctx.lineTo(-15, -18); ctx.lineTo(-1, -13); ctx.lineTo(4, -4)
-        } else if (this.fr === 1 || this.fr === 3) {
-            ctx.moveTo(-2, 0); ctx.lineTo(-16, -4); ctx.lineTo(-8, 5); ctx.lineTo(3, 2)
+        if (gameState.current === gameState.gameOver) {
+            activeSheet = DRAGON_DEATH_SHEET
+            frameIndex = this.deathFrame
         } else {
-            ctx.moveTo(-2, 1); ctx.lineTo(-13, 15); ctx.lineTo(-2, 11); ctx.lineTo(4, 3)
+            ctx.rotate(this.rotation)
+            if (this.fireTimer > 0 && gameState.current === gameState.play) {
+                activeSheet = DRAGON_BREATH_SHEET
+                frameIndex = this.breathFrame
+                offsetX = 24 // Menjaga posisi badan naga tetap sejajar saat api memanjang ke kanan
+            }
         }
-        ctx.closePath(); ctx.fill(); ctx.stroke()
+
+        // Hitung koordinat potong (sX, sY) pada grid 8 kolom
+        let col = frameIndex % this.cols
+        let row = Math.floor(frameIndex / this.cols)
+        let sX = col * this.cellW
+        let sY = row * this.cellH
+
+        if (activeSheet.complete && activeSheet.naturalWidth > 0) {
+            ctx.drawImage(
+                activeSheet,
+                sX, sY, this.cellW, this.cellH,
+                (-this.w / 2) + offsetX, -this.h / 2, this.w, this.h
+            )
+        }
 
         ctx.restore()
     },
 
     flap: function() {
         this.velocity = -this.fly
-        this.fireTimer = 8
+        this.fireTimer = 20
+        this.breathFrame = 24 // Mulai langsung pada frame semburan api keluar
     },
 
     position: function() {
         this.x = Math.max(220, cvs.width * 0.25)
-        if (this.fireTimer > 0) this.fireTimer--
+
+        if (this.fireTimer > 0) {
+            this.fireTimer--
+            if (this.breathFrame < 43) {
+                this.breathFrame++
+            }
+        }
 
         if (gameState.current == gameState.startScreen || gameState.current == gameState.getReady) {
             this.y = (cvs.height * 0.45) + Math.sin(frame * 0.08) * 8
             this.rotation = 0
-            if (frame % 10 == 0) this.fr = (this.fr + 1) % 4
+            this.deathFrame = 0
+            this.fireTimer = 0
+            if (frame % 5 == 0) this.fr = (this.fr + 1) % this.flyTotalFrames
         } else {
-            if (frame % 4 == 0) this.fr = (this.fr + 1) % 4
             this.velocity += this.gravity
             this.y += this.velocity
 
-            if (this.velocity <= this.fly) {
-                this.rotation = -15 * degree
-            } else if (this.velocity >= this.fly + 2) {
-                this.rotation = 65 * degree
-                this.fr = 1
-            } else {
+            if (gameState.current === gameState.gameOver) {
                 this.rotation = 0
+                this.fireTimer = 0
+                if (this.deathFrame < this.deathTotalFrames - 1) {
+                    this.deathFrame++
+                }
+            } else {
+                this.deathFrame = 0
+                if (frame % 3 == 0) this.fr = (this.fr + 1) % this.flyTotalFrames
+
+                if (this.velocity <= this.fly) {
+                    this.rotation = -15 * degree
+                } else if (this.velocity >= this.fly + 2) {
+                    this.rotation = 55 * degree
+                    this.fr = 4
+                } else {
+                    this.rotation = 0
+                }
             }
 
             let groundY = getGroundY()
