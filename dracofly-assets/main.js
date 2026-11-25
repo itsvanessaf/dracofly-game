@@ -27,15 +27,121 @@ let gameState = {
     startScreen: 0,
     getReady: 1,
     play: 2,
-    gameOver: 3
+    gameOver: 3,
+    watchingAd: 4
+}
+
+// Simulasi Layar Iklan (3 Detik)
+let adScreen = {
+    timer: 0,
+    duration: 180, // ~3 detik (180 frame x 17ms)
+
+    start: function() {
+        this.timer = this.duration
+        gameState.current = gameState.watchingAd
+    },
+
+    update: function() {
+        if (gameState.current !== gameState.watchingAd) return
+        this.timer--
+        if (this.timer <= 0) {
+            pipes.reset()
+            dragon.y = cvs.height * 0.45
+            dragon.velocity = 0
+            dragon.rotation = 0
+            gameState.current = gameState.getReady
+            SFX_SWOOSH.play()
+        }
+    },
+
+    render: function() {
+        if (gameState.current !== gameState.watchingAd) return
+
+        let centerX = cvs.width / 2
+        let centerY = cvs.height / 2
+        let secondsLeft = Math.ceil(this.timer / 60)
+
+        ctx.fillStyle = 'rgba(10, 12, 22, 0.95)'
+        ctx.fillRect(0, 0, cvs.width, cvs.height)
+
+        ctx.strokeStyle = '#f1c40f'
+        ctx.lineWidth = 3
+        ctx.strokeRect(centerX - 210, centerY - 90, 420, 180)
+
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#f1c40f'
+        ctx.font = 'bold 24px "Courier New", monospace'
+        ctx.fillText('SPONSORED ROYAL AD', centerX, centerY - 35)
+
+        ctx.fillStyle = '#ecf0f1'
+        ctx.font = 'bold 16px "Courier New", monospace'
+        ctx.fillText('Memulihkan Naga Kerajaan...', centerX, centerY + 5)
+
+        ctx.fillStyle = '#2ecc71'
+        ctx.font = 'bold 20px "Courier New", monospace'
+        ctx.fillText('Lanjut dalam ' + secondsLeft + ' detik...', centerX, centerY + 48)
+    }
+}
+
+// Tombol Interaktif pada Layar GAME OVER
+let gameOverButtons = {
+    getRetryRect: () => ({
+        x: cvs.width / 2 - 135,
+        y: cvs.height / 2 - 5,
+        w: 270,
+        h: 46
+    }),
+
+    getHomeRect: () => ({
+        x: cvs.width / 2 - 135,
+        y: score.lives > 0 ? (cvs.height / 2 + 52) : (cvs.height / 2 + 15),
+        w: 270,
+        h: 46
+    }),
+
+    isInside: function(mx, my, rect) {
+        return mx >= rect.x && mx <= rect.x + rect.w &&
+               my >= rect.y && my <= rect.y + rect.h
+    },
+
+    render: function() {
+        if (gameState.current !== gameState.gameOver) return
+
+        let centerX = cvs.width / 2
+        ctx.textAlign = 'center'
+
+        if (score.lives > 0) {
+            let rBtn = this.getRetryRect()
+            ctx.fillStyle = '#27ae60'
+            ctx.fillRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h)
+            ctx.strokeStyle = '#f1c40f'
+            ctx.lineWidth = 2
+            ctx.strokeRect(rBtn.x, rBtn.y, rBtn.w, rBtn.h)
+
+            ctx.fillStyle = '#ffffff'
+            ctx.font = 'bold 16px "Courier New", monospace'
+            ctx.fillText('▶ CONTINUE ?', centerX, rBtn.y + 29)
+        }
+
+        let hBtn = this.getHomeRect()
+        ctx.fillStyle = '#c0392b'
+        ctx.fillRect(hBtn.x, hBtn.y, hBtn.w, hBtn.h)
+        ctx.strokeStyle = '#f1c40f'
+        ctx.lineWidth = 2
+        ctx.strokeRect(hBtn.x, hBtn.y, hBtn.w, hBtn.h)
+
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 16px "Courier New", monospace'
+        ctx.fillText('⌂ KEMBALI KE HOME', centerX, hBtn.y + 29)
+    }
 }
 
 // Tombol START interaktif bertema Kerajaan
 let startButton = {
     w: 240,
     h: 60,
-    getX: () => cvs.width / 2 - 120,
-    getY: () => cvs.height / 2 + 25,
+    getX: function() { return cvs.width / 2 - this.w / 2 },
+    getY: function() { return cvs.height / 2 - this.h / 2 },
 
     render: function() {
         if (gameState.current !== gameState.startScreen) return
@@ -43,21 +149,10 @@ let startButton = {
         let x = this.getX()
         let y = this.getY()
         let centerX = cvs.width / 2
-        let centerY = cvs.height / 2
 
         // Lapisan gelap transparan
         ctx.fillStyle = 'rgba(15, 20, 38, 0.65)'
         ctx.fillRect(0, 0, cvs.width, cvs.height)
-
-        // Judul Game Kerajaan
-        ctx.textAlign = 'center'
-        ctx.fillStyle = '#f1c40f'
-        ctx.font = 'bold 42px "Courier New", monospace'
-        ctx.fillText('ROYAL DRAGON', centerX, centerY - 48)
-
-        ctx.fillStyle = '#ecf0f1'
-        ctx.font = 'bold 16px "Courier New", monospace'
-        ctx.fillText('DEFEND THE ANCIENT KINGDOM', centerX, centerY - 14)
 
         // Bayangan tombol
         ctx.fillStyle = '#4a151b'
@@ -73,9 +168,18 @@ let startButton = {
         ctx.strokeRect(x, y, this.w, this.h)
 
         // Teks di dalam tombol
+        ctx.save()
         ctx.fillStyle = '#ffffff'
         ctx.font = 'bold 21px "Courier New", monospace'
-        ctx.fillText('▶ ENTER KINGDOM', centerX, y + 37)
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('▶ PLAY', x + this.w / 2, y + this.h / 2 + 1)
+        ctx.restore()
+
+        // Tampilkan High Score di bawah tombol
+        ctx.fillStyle = '#f1c40f'
+        ctx.font = 'bold 16px "Courier New", monospace'
+        ctx.fillText('HIGH SCORE: ' + String(score.best).padStart(3, '0'), centerX, y + this.h + 32)
     }
 }
 
@@ -230,21 +334,18 @@ let bg = {
 
             // Atap Kerucut Kerajaan
             ctx.fillStyle = currentTheme.roof
-            // Atap Kiri
             ctx.beginPath()
             ctx.moveTo(cx - 8, groundY - 200)
             ctx.lineTo(cx + 32, groundY - 265)
             ctx.lineTo(cx + 73, groundY - 200)
             ctx.fill()
 
-            // Atap Kanan
             ctx.beginPath()
             ctx.moveTo(cx + 267, groundY - 200)
             ctx.lineTo(cx + 307, groundY - 265)
             ctx.lineTo(cx + 348, groundY - 200)
             ctx.fill()
 
-            // Atap Utama Tengah
             ctx.beginPath()
             ctx.moveTo(cx + 115, groundY - 255)
             ctx.lineTo(cx + 170, groundY - 340)
@@ -292,7 +393,7 @@ let pipes = {
     gap: 152,
     dx: 4.2,
     pipeGenerator: [],
-    cannonballs: [], // Obstacle tambahan yang meluncur horizontal
+    cannonballs: [],
 
     reset: function() {
         this.pipeGenerator = []
@@ -336,7 +437,6 @@ let pipes = {
             ctx.closePath()
             ctx.fill()
 
-            // Lambang Mahkota/Emas di panji
             ctx.fillStyle = '#f1c40f'
             ctx.beginPath()
             ctx.arc(x + this.w / 2, bannerY + 18, 5, 0, Math.PI * 2)
@@ -369,7 +469,6 @@ let pipes = {
         let ceilingBottom = getCeilingBottom()
         let groundTop = getGroundY()
 
-        // Render Benteng Atas & Bawah
         for (let i = 0; i < this.pipeGenerator.length; i++) {
             let p = this.pipeGenerator[i]
             let topHeight = p.gapY - ceilingBottom
@@ -380,7 +479,6 @@ let pipes = {
             this.drawCastleTower(p.x, botY, botHeight, false, p.isMoving)
         }
 
-        // Render Bola Meriam / Proyektil Kerajaan yang Bergerak
         for (let i = 0; i < this.cannonballs.length; i++) {
             let cb = this.cannonballs[i]
             ctx.save()
@@ -421,7 +519,6 @@ let pipes = {
         // Spawn Benteng Baru
         let lastPipe = this.pipeGenerator[this.pipeGenerator.length - 1]
         if (!lastPipe || lastPipe.x <= cvs.width - 390) {
-            // Mulai skor 2 ke atas, 50% benteng bisa bergerak naik-turun!
             let canMove = score.current >= 2 && Math.random() < 0.55
             let moveSpeed = (Math.random() * 1.1 + 0.9) * (Math.random() < 0.5 ? 1 : -1)
 
@@ -433,14 +530,12 @@ let pipes = {
                 vy: canMove ? moveSpeed : 0
             })
 
-            // Mulai skor 4 ke atas, munculkan bola meriam bergerak di antara benteng
             if (score.current >= 4 && Math.random() < 0.45) {
                 this.cannonballs.push({
                     x: cvs.width + 200,
                     y: Math.floor(Math.random() * (maxY - minY + 40)) + minY,
                     r: 12,
-                    vx: this.dx + 2.4, // Lebih cepat dari benteng
-                    vy: Math.sin(frame) * 1.2
+                    vx: this.dx + 2.4
                 })
             }
         }
@@ -450,17 +545,17 @@ let pipes = {
             let pg = this.pipeGenerator[i]
             pg.x -= this.dx
 
-            // Gerakan vertikal untuk benteng bergerak
             if (pg.isMoving) {
                 pg.gapY += pg.vy
                 if (pg.gapY <= minY || pg.gapY >= maxY) {
-                    pg.vy *= -1 // Balik arah naik/turun
+                    pg.vy *= -1
                 }
             }
 
             if (!pg.passed && pg.x + this.w < dragon.x) {
                 pg.passed = true
                 score.current++
+                score.coins += 2
                 score.updateBest()
                 SFX_SCORE.play()
             }
@@ -478,8 +573,9 @@ let pipes = {
 
             if (dRight > pg.x + 4 && dLeft < pg.x + this.w - 4) {
                 if (dTop < pg.gapY + 8 || dBottom > pg.gapY + this.gap - 8) {
-                    gameState.current = gameState.gameOver
+                    score.loseLife()
                     SFX_COLLISION.play()
+                    return
                 }
             }
         }
@@ -488,7 +584,7 @@ let pipes = {
         for (let i = 0; i < this.cannonballs.length; i++) {
             let cb = this.cannonballs[i]
             cb.x -= cb.vx
-            cb.y += Math.sin(frame * 0.08 + i) * 1.5 // Gerak bergelombang
+            cb.y += Math.sin(frame * 0.08 + i) * 1.5
 
             if (cb.x < -30) {
                 this.cannonballs.splice(i, 1)
@@ -496,13 +592,13 @@ let pipes = {
                 continue
             }
 
-            // Cek tabrakan lingkaran naga vs bola meriam
             let dx = dragon.x - cb.x
             let dy = dragon.y - cb.y
             let dist = Math.sqrt(dx * dx + dy * dy)
             if (dist < dragon.r + cb.r - 2) {
-                gameState.current = gameState.gameOver
+                score.loseLife()
                 SFX_COLLISION.play()
+                return
             }
         }
     }
@@ -558,7 +654,6 @@ let ground = {
             this.drawRoyalTorch(baseX + 75, groundY - 36)
             this.drawRoyalTorch(baseX + 215, groundY - 36)
 
-            // Semak Taman Kerajaan
             ctx.fillStyle = '#27ae60'
             ctx.beginPath()
             ctx.arc(baseX + 142, groundY - 6, 12, Math.PI, 0)
@@ -629,13 +724,18 @@ let ground = {
     }
 }
 
-// 4. HUD ATAS: SCORE, BEST SCORE
+// 4. HUD ATAS: SCORE, BEST SCORE, & LIVES 
 let score = {
     current: 0,
     best: parseInt(localStorage.getItem('royalDragonHighScore')) || 0,
+    coins: 0,
+    lives: 2,
+    maxLives: 2,
 
     reset: function() {
         this.current = 0
+        this.coins = 0
+        this.lives = this.maxLives
     },
 
     updateBest: function() {
@@ -645,6 +745,13 @@ let score = {
         }
     },
 
+    loseLife: function() {
+        if (this.lives > 0) {
+            this.lives--
+        }
+        gameState.current = gameState.gameOver
+    },
+
     render: function() {
         ctx.fillStyle = '#1e272e'
         ctx.fillRect(0, 0, cvs.width, 30)
@@ -652,11 +759,51 @@ let score = {
         ctx.fillStyle = '#f1c40f'
         ctx.font = 'bold 18px "Courier New", monospace'
         ctx.textAlign = 'left'
-        
+
         let formattedScore = String(this.current).padStart(3, '0')
         let formattedBest = String(this.best).padStart(3, '0')
-        
         ctx.fillText('SCORE: ' + formattedScore + '  |  BEST: ' + formattedBest, 20, 21)
+
+        // Kotak Ikon Hati Merah
+        ctx.fillStyle = '#2f3640'
+        ctx.fillRect(20, 36, 24, 22)
+        ctx.strokeStyle = '#f1c40f'
+        ctx.lineWidth = 1.5
+        ctx.strokeRect(20, 36, 24, 22)
+
+        ctx.fillStyle = this.lives > 0 ? '#e84118' : '#576574'
+        ctx.beginPath()
+        ctx.arc(29, 45, 4, 0, Math.PI * 2)
+        ctx.arc(35, 45, 4, 0, Math.PI * 2)
+        ctx.moveTo(25, 46)
+        ctx.lineTo(32, 54)
+        ctx.lineTo(39, 46)
+        ctx.fill()
+
+        // Health Bar Dinamis sesuai sisa nyawa
+        ctx.fillStyle = '#2f3640'
+        ctx.fillRect(48, 40, 100, 14)
+        ctx.strokeRect(48, 40, 100, 14)
+        let hpWidth = (this.lives / this.maxLives) * 96
+        ctx.fillStyle = this.lives === 1 ? '#f39c12' : '#e84118'
+        ctx.fillRect(50, 42, hpWidth, 10)
+
+        // Teks Sisa Nyawa
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 12px "Courier New", monospace'
+        ctx.fillText('LIVES: ' + this.lives + '/' + this.maxLives, 156, 51)
+
+        // Koin Emas Kerajaan
+        ctx.fillStyle = '#f1c40f'
+        ctx.beginPath()
+        ctx.arc(cvs.width - 138, 15, 8, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#b7950b'
+        ctx.stroke()
+
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 18px "Courier New", monospace'
+        ctx.textAlign = 'right'
     }
 }
 
@@ -760,7 +907,9 @@ let dragon = {
         this.x = Math.max(220, cvs.width * 0.25)
         if (this.fireTimer > 0) this.fireTimer--
 
-        if (gameState.current == gameState.startScreen || gameState.current == gameState.getReady) {
+        if (gameState.current == gameState.startScreen ||
+            gameState.current == gameState.getReady ||
+            gameState.current == gameState.watchingAd) {
             this.y = (cvs.height * 0.45) + Math.sin(frame * 0.08) * 8
             this.rotation = 0
             if (frame % 10 == 0) this.fr = (this.fr + 1) % 4
@@ -782,7 +931,7 @@ let dragon = {
             if (this.y + this.r >= groundY) {
                 this.y = groundY - this.r
                 if (gameState.current == gameState.play) {
-                    gameState.current = gameState.gameOver
+                    score.loseLife()
                     SFX_FALL.play()
                 }
             }
@@ -814,19 +963,26 @@ let overlayUI = {
             ctx.font = 'bold 22px "Courier New", monospace'
             ctx.fillText('PRESS SPACE TO FLY', centerX, centerY - 58)
         } else if (gameState.current == gameState.gameOver) {
-            ctx.fillStyle = 'rgba(15, 20, 38, 0.9)'
-            ctx.fillRect(centerX - 190, centerY - 70, 380, 130)
+            let boxH = score.lives > 0 ? 225 : 190
+            ctx.fillStyle = 'rgba(15, 20, 38, 0.92)'
+            ctx.fillRect(centerX - 190, centerY - 105, 380, boxH)
             ctx.strokeStyle = '#f1c40f'
             ctx.lineWidth = 3
-            ctx.strokeRect(centerX - 190, centerY - 70, 380, 130)
+            ctx.strokeRect(centerX - 190, centerY - 105, 380, boxH)
 
             ctx.fillStyle = '#e74c3c'
             ctx.font = 'bold 34px "Courier New", monospace'
-            ctx.fillText('KINGDOM FALLEN', centerX, centerY - 18)
+            ctx.fillText('GAME OVER', centerX, centerY - 55)
 
-            ctx.fillStyle = '#ffffff'
+            ctx.fillStyle = '#f1c40f'
             ctx.font = 'bold 16px "Courier New", monospace'
-            ctx.fillText('PRESS SPACE / CLICK TO RETRY', centerX, centerY + 30)
+            ctx.fillText(
+                'SCORE: ' + score.current + ' | SISA NYAWA: ' + score.lives,
+                centerX,
+                centerY - 22
+            )
+
+            gameOverButtons.render()
             if (description) description.style.visibility = 'visible'
         }
     }
@@ -843,6 +999,7 @@ let draw = () => {
     score.render()
     overlayUI.render()
     startButton.render()
+    adScreen.render()
 }
 
 let update = () => {
@@ -850,6 +1007,7 @@ let update = () => {
     bg.position()
     pipes.position()
     ground.position()
+    adScreen.update()
 }
 
 let loop = () => {
@@ -860,7 +1018,7 @@ let loop = () => {
 setInterval(loop, 17)
 
 /*************************
-***** EVENT HANDLERS ***** 
+***** EVENT HANDLERS *****
 *************************/
 function handleAction() {
     if (gameState.current == gameState.getReady) {
@@ -870,45 +1028,44 @@ function handleAction() {
         dragon.flap()
         SFX_FLAP.play()
         if (description) description.style.visibility = 'hidden'
-    } else if (gameState.current == gameState.gameOver) {
-        pipes.reset()
-        score.reset()
-        gameState.current = gameState.getReady
-        SFX_SWOOSH.play()
     }
 }
 
+// Efek hover pointer untuk tombol START maupun tombol GAME OVER
 cvs.addEventListener('mousemove', (e) => {
-    if (gameState.current !== gameState.startScreen) {
-        cvs.style.cursor = 'default'
-        return
-    }
     let rect = cvs.getBoundingClientRect()
     let mouseX = e.clientX - rect.left
     let mouseY = e.clientY - rect.top
 
-    let bx = startButton.getX()
-    let by = startButton.getY()
-
-    if (mouseX >= bx && mouseX <= bx + startButton.w &&
-        mouseY >= by && mouseY <= by + startButton.h) {
-        cvs.style.cursor = 'pointer'
+    if (gameState.current === gameState.startScreen) {
+        let bx = startButton.getX()
+        let by = startButton.getY()
+        cvs.style.cursor = (mouseX >= bx && mouseX <= bx + startButton.w &&
+                            mouseY >= by && mouseY <= by + startButton.h)
+                            ? 'pointer' : 'default'
+    } else if (gameState.current === gameState.gameOver) {
+        let overRetry = score.lives > 0 && gameOverButtons.isInside(mouseX, mouseY, gameOverButtons.getRetryRect())
+        let overHome = gameOverButtons.isInside(mouseX, mouseY, gameOverButtons.getHomeRect())
+        cvs.style.cursor = (overRetry || overHome) ? 'pointer' : 'default'
     } else {
         cvs.style.cursor = 'default'
     }
 })
 
 cvs.addEventListener('click', (e) => {
-    if (gameState.current == gameState.startScreen) {
-        let rect = cvs.getBoundingClientRect()
-        let clickX = e.clientX - rect.left
-        let clickY = e.clientY - rect.top
+    let rect = cvs.getBoundingClientRect()
+    let clickX = e.clientX - rect.left
+    let clickY = e.clientY - rect.top
 
+    // 1. Layar Main Menu
+    if (gameState.current == gameState.startScreen) {
         let bx = startButton.getX()
         let by = startButton.getY()
 
         if (clickX >= bx && clickX <= bx + startButton.w &&
             clickY >= by && clickY <= by + startButton.h) {
+            score.reset()
+            pipes.reset()
             gameState.current = gameState.getReady
             cvs.style.cursor = 'default'
             SFX_SWOOSH.play()
@@ -916,11 +1073,33 @@ cvs.addEventListener('click', (e) => {
         return
     }
 
+    // 2. Layar Game Over (Pilih Retry Nonton Iklan atau Kembali ke Home)
+    if (gameState.current == gameState.gameOver) {
+        if (score.lives > 0 && gameOverButtons.isInside(clickX, clickY, gameOverButtons.getRetryRect())) {
+            cvs.style.cursor = 'default'
+            adScreen.start()
+            return
+        }
+
+        if (gameOverButtons.isInside(clickX, clickY, gameOverButtons.getHomeRect())) {
+            pipes.reset()
+            score.reset()
+            cvs.style.cursor = 'default'
+            gameState.current = gameState.startScreen
+            SFX_SWOOSH.play()
+            return
+        }
+        return
+    }
+
+    // 3. Saat GetReady / Play
     handleAction()
 })
 
 document.body.addEventListener('keydown', (e) => {
-    if (gameState.current == gameState.startScreen) return
+    if (gameState.current == gameState.startScreen ||
+        gameState.current == gameState.gameOver ||
+        gameState.current == gameState.watchingAd) return
 
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.keyCode === 32 || e.keyCode === 38) {
         e.preventDefault()
