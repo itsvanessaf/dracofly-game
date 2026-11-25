@@ -1,53 +1,77 @@
 @import url('https://fonts.googleapis.com/css2?family=Carter+One&display=swap');
+
 * {
-    font-family: helvetica, sans-serif;
+    font-family: 'Courier New', monospace, sans-serif;
     -webkit-user-select: none;
     -moz-user-select: none;
+    user-select: none;
+    box-sizing: border-box;
 }
-body {
-    background-color: rgba(0,0,0, .95);
-    height: 100vh;
+
+html, body {
+    background-color: #141329;
+    width: 100%;
+    height: 100%;
     margin: 0;
+    padding: 0;
+    overflow: hidden; /* Menghilangkan scrollbar agar full desktop */
 }
 
 /********************
 * video game screen *
 ********************/
+.game-title {
+    position: absolute;
+    top: 38px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    pointer-events: none; /* Agar klik tetap tembus ke canvas */
+}
+
 .game-title h1 {
-/***** Flappy Bird *****/
     text-align: center;
     font-family: 'Carter One', cursive;
-    color: rgb(251, 176, 37);
-    font-size: 3em;
-    line-height: 150%;
+    color: #f1c40f;
+    font-size: 2.5em;
+    line-height: 1.2;
     letter-spacing: 4px;
-    text-shadow: 2px 4px rgba(250,250,250, 1);
+    text-shadow: 3px 3px 0px #151624, 0 0 15px rgba(140, 122, 230, 0.7);
     margin: 0;
-    position: relative;
-    top: 10px;
 }
+
 .game-screen {
-    /* background-color: rgb(69, 184, 194); */
-    width: 300px;
-    height: 500px;
-    margin: 0 auto;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    padding: 0;
     position: relative;
-    top: 50px;
 }
-    canvas {
-        background-color: 
-        black
-        /* #00bbc4 */
-        /* #d2ce89 */
-        ;
-        display: block;
-        width: 300px;
-        height: 500px;
-        margin: 0 auto;
-        border-radius: 10px;
-    }
-    .game-description {
-        color: #f0f0f0;
-        line-height: 2em;
-        text-align: center;
-    }
+
+canvas {
+    background-color: #141329;
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    image-rendering: pixelated;
+}
+
+.game-description {
+    position: absolute;
+    bottom: 65px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: #dfe6e9;
+    background-color: rgba(21, 22, 36, 0.8);
+    padding: 6px 16px;
+    border-radius: 6px;
+    border: 1px solid #474c6b;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    text-align: center;
+    z-index: 10;
+    pointer-events: none;
+}

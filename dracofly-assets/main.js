@@ -1,743 +1,954 @@
 /************************
 ***** DECLARATIONS: *****
 ************************/
-let cvs         //  canvas
-let ctx         //  context'2d'
-let description //  game description
-let theme1      //  original theme
-let theme2      //  original them v2
-let bg          //  background
-let bird        //  bird: yellow
-let bird1       //  bird: red
-let bird2       //  bird: blue
-let pipes       //  top and bottom pipes
-let ground      //  ground floor
-let getReady    //  get ready screen
-let gameOver    //  game over screen
-let map         //  map of number images
-let score       //  score counter
-let gameState   //  state of game
-let frame       //  ms/frame = 17; dx/frame = 2; fps = 59;
-let degree      //  bird rotation degree
-const SFX_SCORE = new Audio()         //  sound for scoring
-const SFX_FLAP = new Audio()          //  sound for flying bird
-const SFX_COLLISION = new Audio()     //  sound for collision
-const SFX_FALL = new Audio()          //  sound for falling to the ground
-const SFX_SWOOSH = new Audio()        //  sound for changing game state
+let cvs = document.getElementById('game')
+let ctx = cvs.getContext('2d')
+let description = document.getElementById('description')
 
-cvs = document.getElementById('game')
-ctx = cvs.getContext('2d')
-description = document.getElementById('description')
-theme1 = new Image()
-theme1.src = 'img/og-theme.png'
-theme2 = new Image()
-theme2.src = 'img/og-theme-2.png'
-frame = 0;
-degree = Math.PI/180
-SFX_SCORE.src = 'audio/sfx_point.wav'
-SFX_FLAP.src = 'audio/sfx_wing.wav'
-SFX_COLLISION.src = 'audio/sfx_hit.wav'
-SFX_FALL.src = 'audio/sfx_die.wav'
-SFX_SWOOSH.src = 'audio/sfx_swooshing.wav'
-
-gameState = {
-    //loads game on ready screen, tick to change state of game
-    current: 0,
-    getReady: 0,
-    //on play game state: bird flaps and flies
-    play: 1,
-    //game over screen: button||click takes player to ready screen
-    gameOver: 2
+// Set ukuran canvas mengikuti layar desktop secara penuh
+function resizeCanvas() {
+    cvs.width = window.innerWidth
+    cvs.height = window.innerHeight
 }
-//background
-bg = {
-    //object's key-value properties pinpointing its location
-    imgX: 0,
-    imgY: 0,
-    width: 276,
-    height: 228,
-    //x,y coordinates of where image should be drawn on canvas
-    x: 0,
-    //https://stackoverflow.com/questions/7043509/this-inside-object
-    //reason why 'y' cannot be defined as this.height or bg.height
-    y: cvs.height - 228,
-    w: 276,
-    h: 228,
-    dx: .2,
-    //object's render function that utilizes all above values to draw image onto canvas
+resizeCanvas()
+window.addEventListener('resize', resizeCanvas)
+
+let frame = 0
+let degree = Math.PI / 180
+
+const SFX_SCORE = new Audio('audio/sfx_point.wav')
+const SFX_FLAP = new Audio('audio/sfx_wing.wav')
+const SFX_COLLISION = new Audio('audio/sfx_hit.wav')
+const SFX_FALL = new Audio('audio/sfx_die.wav')
+const SFX_SWOOSH = new Audio('audio/sfx_swooshing.wav')
+
+let gameState = {
+    current: 0,
+    startScreen: 0,
+    getReady: 1,
+    play: 2,
+    gameOver: 3
+}
+
+// Tombol START interaktif bertema Kerajaan
+let startButton = {
+    w: 240,
+    h: 60,
+    getX: () => cvs.width / 2 - 120,
+    getY: () => cvs.height / 2 + 25,
+
     render: function() {
-        ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x,this.y,this.w,this.h)
+        if (gameState.current !== gameState.startScreen) return
 
-        //image repeat and tile to fit canvas
-        ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x + this.width,this.y,this.w,this.h)
+        let x = this.getX()
+        let y = this.getY()
+        let centerX = cvs.width / 2
+        let centerY = cvs.height / 2
 
-        //image repeat again for continuous animation
-        ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x + this.width*2,this.y,this.w,this.h)
+        // Lapisan gelap transparan
+        ctx.fillStyle = 'rgba(15, 20, 38, 0.65)'
+        ctx.fillRect(0, 0, cvs.width, cvs.height)
+
+        // Judul Game Kerajaan
+        ctx.textAlign = 'center'
+        ctx.fillStyle = '#f1c40f'
+        ctx.font = 'bold 42px "Courier New", monospace'
+        ctx.fillText('ROYAL DRAGON', centerX, centerY - 48)
+
+        ctx.fillStyle = '#ecf0f1'
+        ctx.font = 'bold 16px "Courier New", monospace'
+        ctx.fillText('DEFEND THE ANCIENT KINGDOM', centerX, centerY - 14)
+
+        // Bayangan tombol
+        ctx.fillStyle = '#4a151b'
+        ctx.fillRect(x + 4, y + 6, this.w, this.h)
+
+        // Badan tombol merah kerajaan
+        ctx.fillStyle = '#c0392b'
+        ctx.fillRect(x, y, this.w, this.h)
+
+        // Bingkai emas kerajaan
+        ctx.strokeStyle = '#f1c40f'
+        ctx.lineWidth = 3
+        ctx.strokeRect(x, y, this.w, this.h)
+
+        // Teks di dalam tombol
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 21px "Courier New", monospace'
+        ctx.fillText('▶ ENTER KINGDOM', centerX, y + 37)
+    }
+}
+
+const getBottomBarHeight = () => 50
+const getGroundHeight = () => 55
+const getGroundY = () => cvs.height - getBottomBarHeight() - getGroundHeight()
+const getCeilingBottom = () => 44
+
+// 1. BACKGROUND: Kerajaan Megah, Bendera Berkibar & Pegunungan
+let bg = {
+    xMountains: 0,
+    xCastle: 0,
+    xClouds: 0,
+
+    themes: [
+        {
+            // Tema 0 (Skor 0-4): Siang Kerajaan Cerah
+            sky: ['#2980b9', '#6dd5fa', '#ffffff'],
+            celestial: '#fff200',
+            isSun: true,
+            mountain: '#576574',
+            mountainHighlight: '#8395a7',
+            castle: '#dcdde1',
+            castleShadow: '#7f8fa6',
+            roof: '#c23616',
+            banner: '#e84118',
+            window: '#fbc531',
+            hasStars: false
+        },
+        {
+            // Tema 1 (Skor 5-9): Senja Kerajaan Emas
+            sky: ['#2c3e50', '#d35400', '#f39c12'],
+            celestial: '#ffdd59',
+            isSun: true,
+            mountain: '#4b3832',
+            mountainHighlight: '#6f4e37',
+            castle: '#95a5a6',
+            castleShadow: '#535c68',
+            roof: '#8e44ad',
+            banner: '#f1c40f',
+            window: '#ffeaa7',
+            hasStars: false
+        },
+        {
+            // Tema 2 (Skor 10-14): Malam Kerajaan Biru Safir
+            sky: ['#0c1445', '#192a56', '#273c75'],
+            celestial: '#f5f6fa',
+            isSun: false,
+            mountain: '#1e272e',
+            mountainHighlight: '#2f3640',
+            castle: '#485460',
+            castleShadow: '#1e272e',
+            roof: '#e84118',
+            banner: '#fbc531',
+            window: '#f1c40f',
+            hasStars: true
+        }
+    ],
+
+    render: function() {
+        let groundY = getGroundY()
+        let themeIndex = Math.floor(score.current / 5) % this.themes.length
+        let currentTheme = this.themes[themeIndex]
+
+        // Langit Kerajaan
+        let skyGrad = ctx.createLinearGradient(0, 0, 0, groundY)
+        skyGrad.addColorStop(0, currentTheme.sky[0])
+        skyGrad.addColorStop(0.65, currentTheme.sky[1])
+        skyGrad.addColorStop(1, currentTheme.sky[2])
+        ctx.fillStyle = skyGrad
+        ctx.fillRect(0, 0, cvs.width, cvs.height)
+
+        // Bintang saat tema malam
+        if (currentTheme.hasStars) {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
+            for (let i = 0; i < 25; i++) {
+                let sx = (i * 197) % cvs.width
+                let sy = 50 + ((i * 73) % Math.max(150, groundY * 0.45))
+                ctx.fillRect(sx, sy, 2, 2)
+            }
+        }
+
+        // Matahari / Bulan Kerajaan
+        let celX = cvs.width * 0.22
+        let celY = Math.max(115, cvs.height * 0.2)
+        ctx.fillStyle = currentTheme.celestial
+        ctx.beginPath()
+        ctx.arc(celX, celY, 42, 0, Math.PI * 2)
+        ctx.fill()
+
+        if (!currentTheme.isSun) {
+            ctx.fillStyle = currentTheme.sky[0]
+            ctx.beginPath()
+            ctx.arc(celX + 15, celY - 8, 37, 0, Math.PI * 2)
+            ctx.fill()
+        }
+
+        // Awan Putih Halus
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)'
+        let cloudSpan = 420
+        let cloudCount = Math.ceil(cvs.width / cloudSpan) + 2
+        for (let i = -1; i < cloudCount; i++) {
+            let cx = this.xClouds + i * cloudSpan + 120
+            let cy = 110 + (Math.abs(i) % 2) * 45
+            ctx.beginPath()
+            ctx.arc(cx, cy, 24, 0, Math.PI * 2)
+            ctx.arc(cx + 22, cy - 8, 28, 0, Math.PI * 2)
+            ctx.arc(cx + 48, cy, 22, 0, Math.PI * 2)
+            ctx.fill()
+        }
+
+        // Pegunungan Latar
+        let mWidth = 480
+        let mCount = Math.ceil(cvs.width / mWidth) + 2
+        for (let i = -1; i < mCount; i++) {
+            let offsetX = this.xMountains + i * mWidth
+            ctx.fillStyle = currentTheme.mountain
+            ctx.beginPath()
+            ctx.moveTo(offsetX, groundY)
+            ctx.lineTo(offsetX + 110, groundY - 210)
+            ctx.lineTo(offsetX + 230, groundY - 110)
+            ctx.lineTo(offsetX + 350, groundY - 230)
+            ctx.lineTo(offsetX + mWidth, groundY)
+            ctx.closePath()
+            ctx.fill()
+        }
+
+        // Siluet Istana Kerajaan Megah
+        let castleSpan = 920
+        let cCount = Math.ceil(cvs.width / castleSpan) + 2
+        let wave = Math.sin(frame * 0.12) * 4
+
+        for (let i = -1; i < cCount; i++) {
+            let cx = this.xCastle + i * castleSpan + 350
+
+            // Dinding Tembok Utama Istana
+            ctx.fillStyle = currentTheme.castle
+            ctx.fillRect(cx + 40, groundY - 130, 260, 130)
+
+            // Gerigi Tembok Istana (Battlements)
+            for (let bx = cx + 40; bx < cx + 300; bx += 22) {
+                ctx.fillRect(bx, groundY - 142, 12, 12)
+            }
+
+            // Menara Kiri & Kanan
+            ctx.fillRect(cx, groundY - 200, 65, 200)
+            ctx.fillRect(cx + 275, groundY - 200, 65, 200)
+
+            // Menara Utama Tengah (Royal Keep)
+            ctx.fillStyle = currentTheme.castleShadow
+            ctx.fillRect(cx + 125, groundY - 255, 90, 255)
+
+            // Atap Kerucut Kerajaan
+            ctx.fillStyle = currentTheme.roof
+            // Atap Kiri
+            ctx.beginPath()
+            ctx.moveTo(cx - 8, groundY - 200)
+            ctx.lineTo(cx + 32, groundY - 265)
+            ctx.lineTo(cx + 73, groundY - 200)
+            ctx.fill()
+
+            // Atap Kanan
+            ctx.beginPath()
+            ctx.moveTo(cx + 267, groundY - 200)
+            ctx.lineTo(cx + 307, groundY - 265)
+            ctx.lineTo(cx + 348, groundY - 200)
+            ctx.fill()
+
+            // Atap Utama Tengah
+            ctx.beginPath()
+            ctx.moveTo(cx + 115, groundY - 255)
+            ctx.lineTo(cx + 170, groundY - 340)
+            ctx.lineTo(cx + 225, groundY - 255)
+            ctx.fill()
+
+            // Tiang & Bendera Kerajaan Berkibar
+            ctx.fillStyle = '#f1c40f'
+            ctx.fillRect(cx + 168, groundY - 375, 4, 35)
+            ctx.fillStyle = currentTheme.banner
+            ctx.beginPath()
+            ctx.moveTo(cx + 172, groundY - 373)
+            ctx.lineTo(cx + 204, groundY - 365 + wave)
+            ctx.lineTo(cx + 172, groundY - 355)
+            ctx.fill()
+
+            // Gerbang Utama Istana
+            ctx.fillStyle = '#2f3640'
+            ctx.beginPath()
+            ctx.arc(cx + 170, groundY - 55, 26, Math.PI, 0)
+            ctx.lineTo(cx + 196, groundY)
+            ctx.lineTo(cx + 144, groundY)
+            ctx.fill()
+
+            // Jendela Istana Bercahaya
+            ctx.fillStyle = currentTheme.window
+            ctx.fillRect(cx + 24, groundY - 170, 16, 28)
+            ctx.fillRect(cx + 300, groundY - 170, 16, 28)
+            ctx.fillRect(cx + 160, groundY - 220, 20, 34)
+        }
     },
 
-    position: function () {
-        //still img on get ready frame
-        if (gameState.current == gameState.getReady) {
-            this.x = 0
-        }    
-        //ANIMATION: slowly move background on play game state by decrementing x
+    position: function() {
         if (gameState.current == gameState.play) {
-            this.x = (this.x-this.dx) % (this.w)
+            this.xClouds = (this.xClouds - 0.25) % 420
+            this.xMountains = (this.xMountains - 0.5) % 480
+            this.xCastle = (this.xCastle - 1.1) % 920
         }
     }
 }
-//top and bottom pipes
-pipes = {
-    //object's key-value properties pinpointing its location
-    //top pipe image x,y coordinate
-    top: {
-        imgX: 56,
-        imgY: 323,
-    },
-    //bot pipe image x,y coordinate
-    bot: {
-        imgX: 84,
-        imgY:323,
-    },
-    width: 26,
-    height: 160,
-    //pipes' values for drawing on canvas
-    w: 55,
-    h: 300,
-    gap: 85,
-    dx: 2,
-    //acceptable y values must be -260 <= y <= -40
-    minY: -260,
-    maxY: -40,
-    
+
+// 2. OBSTACLES: Benteng Kerajaan + Benteng Bergerak + Bola Meriam
+let pipes = {
+    w: 78,
+    gap: 152,
+    dx: 4.2,
     pipeGenerator: [],
-    
+    cannonballs: [], // Obstacle tambahan yang meluncur horizontal
+
     reset: function() {
         this.pipeGenerator = []
+        this.cannonballs = []
     },
-    //object's render function that utilizes all above values to draw image onto canvas
+
+    drawCastleTower: function(x, y, height, isTop, isMoving) {
+        if (height <= 0) return
+
+        // Badan Tembok Benteng Batu Kerajaan
+        ctx.fillStyle = isMoving ? '#8c7ae6' : '#bdc3c7'
+        ctx.fillRect(x + 6, y, this.w - 12, height)
+
+        // Sisi Bayangan Benteng
+        ctx.fillStyle = isMoving ? '#7158e2' : '#95a5a6'
+        ctx.fillRect(x + this.w - 20, y, 14, height)
+
+        ctx.strokeStyle = '#2c3e50'
+        ctx.lineWidth = 2
+        ctx.strokeRect(x + 6, y, this.w - 12, height)
+
+        // Garis susunan batu bata benteng
+        ctx.strokeStyle = 'rgba(44, 62, 80, 0.35)'
+        for (let by = y + 25; by < y + height - 20; by += 26) {
+            ctx.beginPath()
+            ctx.moveTo(x + 6, by)
+            ctx.lineTo(x + this.w - 6, by)
+            ctx.stroke()
+        }
+
+        // Panji Kerajaan di tengah benteng jika cukup tinggi
+        if (height > 85) {
+            let bannerY = y + height / 2 - 22
+            ctx.fillStyle = '#c0392b'
+            ctx.beginPath()
+            ctx.moveTo(x + this.w / 2 - 12, bannerY)
+            ctx.lineTo(x + this.w / 2 + 12, bannerY)
+            ctx.lineTo(x + this.w / 2 + 12, bannerY + 32)
+            ctx.lineTo(x + this.w / 2, bannerY + 42)
+            ctx.lineTo(x + this.w / 2 - 12, bannerY + 32)
+            ctx.closePath()
+            ctx.fill()
+
+            // Lambang Mahkota/Emas di panji
+            ctx.fillStyle = '#f1c40f'
+            ctx.beginPath()
+            ctx.arc(x + this.w / 2, bannerY + 18, 5, 0, Math.PI * 2)
+            ctx.fill()
+        }
+
+        // Kepala Benteng (Battlement)
+        let capH = Math.min(26, height)
+        let capY = isTop ? (y + height - capH) : y
+        ctx.fillStyle = isMoving ? '#9c88ff' : '#ecf0f1'
+        ctx.fillRect(x, capY, this.w, capH)
+        ctx.strokeStyle = '#2c3e50'
+        ctx.strokeRect(x, capY, this.w, capH)
+
+        // Gerigi Benteng Kerajaan (Crenellations)
+        let merlonCount = 3
+        let merlonW = 16
+        let spacing = (this.w - merlonCount * merlonW) / (merlonCount + 1)
+        ctx.fillStyle = isMoving ? '#f1c40f' : '#bdc3c7'
+
+        for (let i = 0; i < merlonCount; i++) {
+            let mx = x + spacing + i * (merlonW + spacing)
+            let my = isTop ? (capY + capH) : (capY - 12)
+            ctx.fillRect(mx, my, merlonW, 12)
+            ctx.strokeRect(mx, my, merlonW, 12)
+        }
+    },
+
     render: function() {
-        //draw whatever is in the pipeGenerator
+        let ceilingBottom = getCeilingBottom()
+        let groundTop = getGroundY()
+
+        // Render Benteng Atas & Bawah
         for (let i = 0; i < this.pipeGenerator.length; i++) {
-            let pipe = this.pipeGenerator[i]
-            let topPipe = pipe.y
-            let bottomPipe = pipe.y + this.gap + this.h
+            let p = this.pipeGenerator[i]
+            let topHeight = p.gapY - ceilingBottom
+            let botY = p.gapY + this.gap
+            let botHeight = groundTop - botY
 
-            ctx.drawImage(theme2, this.top.imgX,this.top.imgY,this.width,this.height, pipe.x,topPipe,this.w,this.h)
-            ctx.drawImage(theme2, this.bot.imgX,this.bot.imgY,this.width,this.height, pipe.x,bottomPipe,this.w,this.h)
+            this.drawCastleTower(p.x, ceilingBottom, topHeight, true, p.isMoving)
+            this.drawCastleTower(p.x, botY, botHeight, false, p.isMoving)
+        }
+
+        // Render Bola Meriam / Proyektil Kerajaan yang Bergerak
+        for (let i = 0; i < this.cannonballs.length; i++) {
+            let cb = this.cannonballs[i]
+            ctx.save()
+            ctx.translate(cb.x, cb.y)
+
+            // Ekor api meriam
+            ctx.fillStyle = '#e67e22'
+            ctx.beginPath()
+            ctx.moveTo(0, -8)
+            ctx.lineTo(24 + Math.random() * 8, 0)
+            ctx.lineTo(0, 8)
+            ctx.fill()
+
+            // Bola besi meriam
+            ctx.fillStyle = '#2f3640'
+            ctx.beginPath()
+            ctx.arc(0, 0, cb.r, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.strokeStyle = '#f1c40f'
+            ctx.lineWidth = 2
+            ctx.stroke()
+
+            // Kilau logam
+            ctx.fillStyle = '#7f8fa6'
+            ctx.beginPath()
+            ctx.arc(-4, -4, 3.5, 0, Math.PI * 2)
+            ctx.fill()
+            ctx.restore()
         }
     },
+
     position: function() {
-        //if game is not in session, do nothing
-        if (gameState.current !== gameState.play) {
-            return
-        }
-        //if game is in session, generate set of pipes forever
-        if (gameState.current == gameState.play) {
-            
-            //when pipes reach this frame, generate another set
-            if (frame%100 == 0) {
-                this.pipeGenerator.push(
-                    {
-                        //spawn off canvas
-                        //pipes' x value needs to be width of canvas to render outside
-                        x: cvs.width,
-                        //random y-coordinates
-                        //pipes' y value needs to vary randomly within acceptable parameters
-                        y: Math.floor((Math.random() * (this.maxY-this.minY+1)) + this.minY)
-                    }
-                )
+        if (gameState.current !== gameState.play) return
+
+        let minY = getCeilingBottom() + 55
+        let maxY = getGroundY() - this.gap - 55
+
+        // Spawn Benteng Baru
+        let lastPipe = this.pipeGenerator[this.pipeGenerator.length - 1]
+        if (!lastPipe || lastPipe.x <= cvs.width - 390) {
+            // Mulai skor 2 ke atas, 50% benteng bisa bergerak naik-turun!
+            let canMove = score.current >= 2 && Math.random() < 0.55
+            let moveSpeed = (Math.random() * 1.1 + 0.9) * (Math.random() < 0.5 ? 1 : -1)
+
+            this.pipeGenerator.push({
+                x: cvs.width,
+                gapY: Math.floor(Math.random() * (maxY - minY + 1)) + minY,
+                passed: false,
+                isMoving: canMove,
+                vy: canMove ? moveSpeed : 0
+            })
+
+            // Mulai skor 4 ke atas, munculkan bola meriam bergerak di antara benteng
+            if (score.current >= 4 && Math.random() < 0.45) {
+                this.cannonballs.push({
+                    x: cvs.width + 200,
+                    y: Math.floor(Math.random() * (maxY - minY + 40)) + minY,
+                    r: 12,
+                    vx: this.dx + 2.4, // Lebih cepat dari benteng
+                    vy: Math.sin(frame) * 1.2
+                })
             }
-            //iterate for all pipes generated (animation, collision, deletion)
-            for (let i = 0; i < this.pipeGenerator.length; i++) {
+        }
 
-                //decleration for bird and pipes' parameters (COLLISION)
-                let pg = this.pipeGenerator[i]
-                let b = {
-                    left: bird.x - bird.r,
-                    right: bird.x + bird.r,
-                    top: bird.y - bird.r,
-                    bottom: bird.y + bird.r,
-                }
-                let p = {
-                    top: {
-                        top: pg.y,
-                        bottom: pg.y + this.h
-                    },
-                    bot: {
-                        top: pg.y + this.h + this.gap,
-                        bottom: pg.y + this.h*2 + this.gap
-                    },
-                    left: pg.x,
-                    right: pg.x + this.w
-                }
+        // Update posisi & tabrakan Benteng
+        for (let i = 0; i < this.pipeGenerator.length; i++) {
+            let pg = this.pipeGenerator[i]
+            pg.x -= this.dx
 
-                //ANIMATION: set of pipes scroll from the right of canvas by decrementing x
-                pg.x -= this.dx
-                
-                //delete pipes as they scroll off the canvas (memory management)
-                if(pg.x < -this.w) {
-                    this.pipeGenerator.shift()
-                        //score up
-                        score.current++
-                        SFX_SCORE.play()
-                    }
+            // Gerakan vertikal untuk benteng bergerak
+            if (pg.isMoving) {
+                pg.gapY += pg.vy
+                if (pg.gapY <= minY || pg.gapY >= maxY) {
+                    pg.vy *= -1 // Balik arah naik/turun
+                }
+            }
 
-                //PIPE COLLISION
-                //collision with top pipe
-                if (b.left < p.right &&
-                    b.right > p.left &&
-                    b.top < p.top.bottom &&
-                    b.bottom > p.top.top) {
-                        gameState.current = gameState.gameOver
-                        SFX_COLLISION.play()
+            if (!pg.passed && pg.x + this.w < dragon.x) {
+                pg.passed = true
+                score.current++
+                score.coins += 2
+                SFX_SCORE.play()
+            }
+
+            if (pg.x < -this.w - 30) {
+                this.pipeGenerator.shift()
+                i--
+                continue
+            }
+
+            let dLeft = dragon.x - dragon.r
+            let dRight = dragon.x + dragon.r
+            let dTop = dragon.y - dragon.r
+            let dBottom = dragon.y + dragon.r
+
+            if (dRight > pg.x + 4 && dLeft < pg.x + this.w - 4) {
+                if (dTop < pg.gapY + 8 || dBottom > pg.gapY + this.gap - 8) {
+                    gameState.current = gameState.gameOver
+                    SFX_COLLISION.play()
                 }
-                //collision with bottom pipe
-                if (b.left < p.right &&
-                    b.right > p.left &&
-                    b.top < p.bot.bottom &&
-                    b.bottom > p.bot.top) {
-                        gameState.current = gameState.gameOver
-                        SFX_COLLISION.play()
-                }
+            }
+        }
+
+        // Update posisi & tabrakan Bola Meriam Bergerak
+        for (let i = 0; i < this.cannonballs.length; i++) {
+            let cb = this.cannonballs[i]
+            cb.x -= cb.vx
+            cb.y += Math.sin(frame * 0.08 + i) * 1.5 // Gerak bergelombang
+
+            if (cb.x < -30) {
+                this.cannonballs.splice(i, 1)
+                i--
+                continue
+            }
+
+            // Cek tabrakan lingkaran naga vs bola meriam
+            let dx = dragon.x - cb.x
+            let dy = dragon.y - cb.y
+            let dist = Math.sqrt(dx * dx + dy * dy)
+            if (dist < dragon.r + cb.r - 2) {
+                gameState.current = gameState.gameOver
+                SFX_COLLISION.play()
             }
         }
     }
 }
-//ground floor
-ground = {
-    //object's key-value properties pinpointing its location
-    imgX: 276,
-    imgY: 0,
-    width: 224,
-    height: 112,
-    //values for drawing on canvas
+
+// 3. GROUND & CEILING: Jalan Batu Kerajaan & Obor Api Emas
+let ground = {
     x: 0,
-    y:cvs.height - 112,
-    w:224,
-    h:112,
-    dx: 2,
-    render: function() {
-        ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x,this.y,this.w,this.h)
-        //image repeat and tile to fit canvas
-        ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x + this.width,this.y,this.w,this.h)
+    dx: 4.2,
+
+    drawRoyalTorch: function(tx, ty) {
+        ctx.fillStyle = '#4a3525'
+        ctx.fillRect(tx - 3, ty, 6, 36)
+        ctx.fillStyle = '#f1c40f'
+        ctx.fillRect(tx - 6, ty - 3, 12, 5)
+
+        let flicker = Math.sin(frame * 0.25 + tx) * 3.5
+        ctx.fillStyle = 'rgba(243, 156, 18, 0.28)'
+        ctx.beginPath()
+        ctx.arc(tx, ty - 14, 24 + flicker, 0, Math.PI * 2)
+        ctx.fill()
+
+        ctx.fillStyle = '#e67e22'
+        ctx.beginPath()
+        ctx.moveTo(tx - 8, ty - 3)
+        ctx.quadraticCurveTo(tx - 10, ty - 20, tx + flicker * 0.5, ty - 32 - flicker)
+        ctx.quadraticCurveTo(tx + 10, ty - 20, tx + 8, ty - 3)
+        ctx.fill()
+
+        ctx.fillStyle = '#fff200'
+        ctx.beginPath()
+        ctx.arc(tx, ty - 10, 4.5, 0, Math.PI * 2)
+        ctx.fill()
     },
-    //ANIMATION:  ground scrolls to the left in a continuous loop when game state is at play
-    //needs to be at the same rate of pipes' scroll speed
-    position: function() {
-        if (gameState.current == gameState.getReady) {
-            this.x = 0
+
+    render: function() {
+        let groundY = getGroundY()
+        let groundH = getGroundHeight()
+        let barY = cvs.height - getBottomBarHeight()
+
+        // Langit-langit Batu Kerajaan
+        ctx.fillStyle = '#7f8fa6'
+        ctx.fillRect(0, 30, cvs.width, 14)
+        ctx.strokeStyle = '#2f3640'
+        ctx.lineWidth = 2
+        ctx.strokeRect(0, 30, cvs.width, 14)
+
+        // Obor Kerajaan & Semak Taman Istana
+        let segmentW = 280
+        let count = Math.ceil(cvs.width / segmentW) + 2
+        for (let i = -1; i < count; i++) {
+            let baseX = this.x + i * segmentW
+            this.drawRoyalTorch(baseX + 75, groundY - 36)
+            this.drawRoyalTorch(baseX + 215, groundY - 36)
+
+            // Semak Taman Kerajaan
+            ctx.fillStyle = '#27ae60'
+            ctx.beginPath()
+            ctx.arc(baseX + 142, groundY - 6, 12, Math.PI, 0)
+            ctx.arc(baseX + 154, groundY - 5, 10, Math.PI, 0)
+            ctx.fill()
         }
+
+        // Jalan Batu Kerajaan (Cobblestone)
+        ctx.fillStyle = '#7f8c8d'
+        ctx.fillRect(0, groundY, cvs.width, groundH)
+
+        // Lis Rumput Hijau di atas jalan batu
+        ctx.fillStyle = '#2ecc71'
+        ctx.fillRect(0, groundY, cvs.width, 6)
+
+        ctx.strokeStyle = '#2c3e50'
+        ctx.lineWidth = 2
+        let rowH = groundH / 3
+        for (let row = 0; row < 3; row++) {
+            let by = groundY + row * rowH
+            ctx.beginPath()
+            ctx.moveTo(0, by); ctx.lineTo(cvs.width, by)
+            ctx.stroke()
+
+            let offset = (row % 2) * 24
+            for (let bx = this.x - 48 + offset; bx < cvs.width + 48; bx += 48) {
+                ctx.beginPath()
+                ctx.moveTo(bx, by); ctx.lineTo(bx, by + rowH)
+                ctx.stroke()
+            }
+        }
+
+        // Panel Kontrol Bawah Kerajaan
+        ctx.fillStyle = '#1e272e'
+        ctx.fillRect(0, barY, cvs.width, getBottomBarHeight())
+        ctx.strokeStyle = '#f1c40f'
+        ctx.lineWidth = 2
+        ctx.beginPath()
+        ctx.moveTo(0, barY); ctx.lineTo(cvs.width, barY)
+        ctx.stroke()
+
+        ctx.fillStyle = '#ffffff'
+        ctx.font = 'bold 16px "Courier New", monospace'
+        ctx.textAlign = 'center'
+        ctx.fillText('[PRESS SPACE TO FLY]', cvs.width * 0.40, barY + 30)
+
+        let btnX = cvs.width * 0.62
+        ctx.fillStyle = '#2f3640'
+        ctx.fillRect(btnX, barY + 13, 22, 22)
+        ctx.strokeStyle = '#f1c40f'
+        ctx.strokeRect(btnX, barY + 13, 22, 22)
+        ctx.fillStyle = '#f1c40f'
+        ctx.beginPath()
+        ctx.moveTo(btnX + 11, barY + 18)
+        ctx.lineTo(btnX + 6, barY + 27)
+        ctx.lineTo(btnX + 16, barY + 27)
+        ctx.fill()
+
+        ctx.fillStyle = '#ffffff'
+        ctx.textAlign = 'left'
+        ctx.fillText('[ARROW UP TO FLY]', btnX + 32, barY + 30)
+    },
+
+    position: function() {
         if (gameState.current == gameState.play) {
-            //modulus keeps this.x value infinitely cycling back to zero
-            this.x = (this.x-this.dx) % (this.w/2)
+            this.x = (this.x - this.dx) % 280
         }
     }
 }
-//map of number images
-map = [
-    num0 = {
-        imgX: 496,
-        imgY: 60,
-        width: 12,
-        height: 18
-    },
-    num1 = {
-        imgX: 135,
-        imgY: 455,
-        width: 10,
-        height: 18
-    },
-    num2 = {
-        imgX: 292,
-        imgY: 160,
-        width: 12,
-        height: 18
-    },
-    num3 = {
-        imgX: 306,
-        imgY: 160,
-        width: 12,
-        height: 18
-    },
-    num4 = {
-        imgX: 320,
-        imgY: 160,
-        width: 12,
-        height: 18
-    },
-    num5 = {
-        imgX: 334,
-        imgY: 160,
-        width: 12,
-        height: 18
-    },
-    num6 = {
-        imgX: 292,
-        imgY: 184,
-        width: 12,
-        height: 18
-    },
-    num7 = {
-        imgX: 306,
-        imgY: 184,
-        width: 12,
-        height: 18
-    },
-    num8 = {
-        imgX: 320,
-        imgY: 184,
-        width: 12,
-        height: 18
-    },
-    num9 = {
-        imgX: 334,
-        imgY: 184,
-        width: 12,
-        height: 18
-    }    
-]
-//current score, top score, tracker
-score = {
+
+// 4. HUD ATAS: SCORE, Health Bar + Heart, ROYAL GOLD
+let score = {
     current: 0,
-    best: null, // DO THIS STRETCH GOAL
-    //values for drawing mapped numbers on canvas
-    x: cvs.width/2,
-    y: 40,
-    w: 15,
-    h: 25,
+    coins: 0,
     reset: function() {
         this.current = 0
+        this.coins = 0
     },
-    //display the score
     render: function() {
-        if (gameState.current == gameState.play ||
-            gameState.current == gameState.gameOver) {
-            //change current score number value to string value and access each place value
-            let string = this.current.toString()
-            let ones = string.charAt(string.length-1)
-            let tens = string.charAt(string.length-2)
-            let hundreds = string.charAt(string.length-3)
+        ctx.fillStyle = '#1e272e'
+        ctx.fillRect(0, 0, cvs.width, 30)
 
-            //if current score has thousands place value: the game is over
-            if (this.current >= 1000) {
-                gameState.current = gameState.gameOver
-            
-            //if current score has ones, tens, and hundreds place value only
-            } else if (this.current >= 100) {
-                ctx.drawImage(theme2, map[ones].imgX,map[ones].imgY,map[ones].width,map[ones].height, ( (this.x-this.w/2) + (this.w) + 3 ),this.y,this.w,this.h)
+        ctx.fillStyle = '#f1c40f'
+        ctx.font = 'bold 18px "Courier New", monospace'
+        ctx.textAlign = 'left'
+        let formattedScore = String(this.current).padStart(3, '0')
+        ctx.fillText('SCORE: ' + formattedScore, 20, 21)
 
-                ctx.drawImage(theme2, map[tens].imgX,map[tens].imgY,map[tens].width,map[tens].height, ( (this.x-this.w/2) ),this.y,this.w,this.h)
+        // Kotak Ikon Hati Merah
+        ctx.fillStyle = '#2f3640'
+        ctx.fillRect(20, 36, 24, 22)
+        ctx.strokeStyle = '#f1c40f'
+        ctx.lineWidth = 1.5
+        ctx.strokeRect(20, 36, 24, 22)
 
-                ctx.drawImage(theme2, map[hundreds].imgX,map[hundreds].imgY,map[hundreds].width,map[hundreds].height, (   (this.x-this.w/2) - (this.w) - 3 ),this.y,this.w,this.h)
+        ctx.fillStyle = '#e84118'
+        ctx.beginPath()
+        ctx.arc(29, 45, 4, 0, Math.PI * 2)
+        ctx.arc(35, 45, 4, 0, Math.PI * 2)
+        ctx.moveTo(25, 46)
+        ctx.lineTo(32, 54)
+        ctx.lineTo(39, 46)
+        ctx.fill()
 
-            //if current score has ones and tens place value only
-            } else if (this.current >= 10) {
-                ctx.drawImage(theme2, map[ones].imgX,map[ones].imgY,map[ones].width,map[ones].height, ( (this.x-this.w/2) + (this.w/2) + 3 ),this.y,this.w,this.h)
+        // Health Bar Merah
+        ctx.fillStyle = '#2f3640'
+        ctx.fillRect(48, 40, 100, 14)
+        ctx.strokeRect(48, 40, 100, 14)
+        let hpWidth = gameState.current === gameState.gameOver ? 0 : 72
+        ctx.fillStyle = '#e84118'
+        ctx.fillRect(50, 42, hpWidth, 10)
 
-                ctx.drawImage(theme2, map[tens].imgX,map[tens].imgY,map[tens].width,map[tens].height, ( (this.x-this.w/2) - (this.w/2) - 3 ),this.y,this.w,this.h)
-            
-            //if current score has ones place value only
-            } else {
-                ctx.drawImage(theme2, map[ones].imgX,map[ones].imgY,map[ones].width,map[ones].height, ( this.x-this.w/2 ),this.y,this.w,this.h)
-            }
-        }
+        // Koin Emas Kerajaan
+        ctx.fillStyle = '#f1c40f'
+        ctx.beginPath()
+        ctx.arc(cvs.width - 138, 15, 8, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.strokeStyle = '#b7950b'
+        ctx.stroke()
+
+        ctx.fillStyle = '#ffffff'
+        ctx.textAlign = 'right'
+        ctx.fillText('GOLD: ' + this.coins, cvs.width - 20, 21)
     }
-}    
-//bird : YELLOW BIRD
-bird = {
-    animation: [
-        {imgX: 276, imgY: 114},  //  position 0
-        {imgX: 276, imgY: 140},  //  position 1
-        {imgX: 276, imgY: 166},  //  position 2
-        {imgX: 276, imgY: 140}   //  position 1
-    ],
+}
+
+// 5. PLAYER CHARACTER: NAGA KERAJAAN (Royal Dragon)
+let dragon = {
     fr: 0,
-    //object's key-value properties pinpointing its location
-    width: 34,
-    height: 24,
-    //values for drawing on canvas
-    x: 50,
-    y: 160,
-    w: 34,
-    h: 24,
-    //bird's radius
-    r: 12,
-    //how much the bird flies per flap()
-    fly: 5.25,
-    //gravity increments the velocity per frame
-    gravity: .32,
-    //velocity = pixels the bird will drop in a frame
+    x: Math.max(220, window.innerWidth * 0.25),
+    y: window.innerHeight * 0.45,
+    r: 15,
+    fly: 6.2,
+    gravity: 0.34,
     velocity: 0,
-    //object's render function that utilizes all above values to draw image onto canvas
+    rotation: 0,
+    fireTimer: 0,
+
     render: function() {
-        let bird = this.animation[this.fr]
-        //save all previous setting
         ctx.save()
-        //target center of bird
         ctx.translate(this.x, this.y)
-        //rotate bird by degree
+        ctx.scale(1.15, 1.15)
         ctx.rotate(this.rotation)
-        ctx.drawImage(theme1, bird.imgX,bird.imgY,this.width,this.height, -this.w/2,-this.h/2,this.w,this.h)
-        ctx.restore()
-        //bird is centered on x,y position
-        // ctx.drawImage(theme1, bird.imgX,bird.imgY,this.width,this.height, this.x-this.w/2,this.y-this.h/2,this.w,this.h)
-    },
-    //bird flies
-    flap: function() {
-        this.velocity = - this.fly
-    },
-    //function checks gameState and updates bird's position
-    position: function() {
-        if (gameState.current == gameState.getReady) {
-            this.y = 160
-            this.rotation = 0 * degree
-            //bird animation changes every 20 frames
-            if (frame%20 == 0) {
-                this.fr += 1
-            }
-            //when bird animation reaches its last value, reset animation
-            if (this.fr > this.animation.length - 1) {
-                this.fr = 0
-            }
 
+        if (gameState.current === gameState.play || gameState.current === gameState.getReady) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.moveTo(-18, -6); ctx.quadraticCurveTo(-32, -2, -40, 8)
+            ctx.moveTo(-16, 8); ctx.quadraticCurveTo(-28, 14, -36, 18)
+            ctx.stroke()
+        }
+
+        // Semburan Api Emas Naga
+        if (this.fireTimer > 0) {
+            ctx.fillStyle = '#f39c12'
+            ctx.beginPath()
+            ctx.moveTo(16, 1)
+            ctx.lineTo(34 + Math.random() * 6, -4)
+            ctx.lineTo(30 + Math.random() * 6, 2)
+            ctx.lineTo(36 + Math.random() * 6, 7)
+            ctx.lineTo(16, 5)
+            ctx.closePath()
+            ctx.fill()
+        }
+
+        // Ekor Naga Merah Kerajaan
+        ctx.fillStyle = '#c0392b'
+        ctx.beginPath()
+        ctx.moveTo(-10, 2); ctx.lineTo(-24, -3); ctx.lineTo(-18, 7)
+        ctx.closePath(); ctx.fill()
+
+        // Badan Naga
+        ctx.fillStyle = '#e74c3c'
+        ctx.strokeStyle = '#2c3e50'
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.ellipse(-2, 2, 13, 9, 0, 0, Math.PI * 2)
+        ctx.fill(); ctx.stroke()
+
+        // Kepala Naga
+        ctx.beginPath()
+        ctx.roundRect(4, -8, 15, 13, 4)
+        ctx.fill(); ctx.stroke()
+
+        // Mahkota Emas Kecil di Kepala Naga
+        ctx.fillStyle = '#f1c40f'
+        ctx.beginPath()
+        ctx.moveTo(6, -8)
+        ctx.lineTo(7, -14)
+        ctx.lineTo(10, -10)
+        ctx.lineTo(13, -14)
+        ctx.lineTo(15, -8)
+        ctx.closePath()
+        ctx.fill()
+
+        // Mata Emas
+        ctx.fillStyle = '#fff200'
+        ctx.beginPath()
+        ctx.arc(13, -3, 2.5, 0, Math.PI * 2)
+        ctx.fill()
+
+        // Sayap Emas/Merah
+        ctx.fillStyle = '#f39c12'
+        ctx.beginPath()
+        if (this.fr === 0) {
+            ctx.moveTo(-2, -2); ctx.lineTo(-15, -18); ctx.lineTo(-1, -13); ctx.lineTo(4, -4)
+        } else if (this.fr === 1 || this.fr === 3) {
+            ctx.moveTo(-2, 0); ctx.lineTo(-16, -4); ctx.lineTo(-8, 5); ctx.lineTo(3, 2)
         } else {
-            //bird animation changes every 4 frames
-            if (frame%4 == 0) {
-                this.fr += 1
-            }
-            //when bird animation reaches its last value, reset animation
-            if (this.fr > this.animation.length - 1) {
-                this.fr = 0
-            }
+            ctx.moveTo(-2, 1); ctx.lineTo(-13, 15); ctx.lineTo(-2, 11); ctx.lineTo(4, 3)
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke()
 
-            //bird falls to gravity
+        ctx.restore()
+    },
+
+    flap: function() {
+        this.velocity = -this.fly
+        this.fireTimer = 8
+    },
+
+    position: function() {
+        this.x = Math.max(220, cvs.width * 0.25)
+        if (this.fireTimer > 0) this.fireTimer--
+
+        if (gameState.current == gameState.startScreen || gameState.current == gameState.getReady) {
+            this.y = (cvs.height * 0.45) + Math.sin(frame * 0.08) * 8
+            this.rotation = 0
+            if (frame % 10 == 0) this.fr = (this.fr + 1) % 4
+        } else {
+            if (frame % 4 == 0) this.fr = (this.fr + 1) % 4
             this.velocity += this.gravity
             this.y += this.velocity
 
-            //bird rotation
             if (this.velocity <= this.fly) {
                 this.rotation = -15 * degree
-            } else if (this.velocity >= this.fly+2) {
-                this.rotation = 70 * degree
+            } else if (this.velocity >= this.fly + 2) {
+                this.rotation = 65 * degree
                 this.fr = 1
             } else {
                 this.rotation = 0
             }
 
-            //check collision with ground
-            if (this.y+this.h/2 >= cvs.height-ground.h) {
-                this.y = cvs.height-ground.h - this.h/2
-                //stop flapping when it hits the ground
-                if (frame%1 == 0) {
-                    this.fr = 2
-                    this.rotation = 70 * degree
-                }
-                //then the game is over
+            let groundY = getGroundY()
+            if (this.y + this.r >= groundY) {
+                this.y = groundY - this.r
                 if (gameState.current == gameState.play) {
                     gameState.current = gameState.gameOver
                     SFX_FALL.play()
                 }
             }
-            
-            //bird cannot fly above canvas
-            if (this.y-this.h/2 <= 0) {
-                this.y = this.r
-            }
 
+            let ceilingBottom = getCeilingBottom()
+            if (this.y - this.r <= ceilingBottom) {
+                this.y = ceilingBottom + this.r
+                this.velocity = 0
+            }
         }
     }
 }
-//bird1 : RED BIRD
-bird1 = {
-    //ANIMATION: bird  //DO THIS STRETCH GOAL
-    animation: [
-        {imgX: 115, imgY: 381},  //  position 0
-        {imgX: 115, imgY: 407},  //  position 1
-        {imgX: 115, imgY: 433},  //  position 2
-        {imgX: 115, imgY: 407}   //  position 1
-    ],
-    fr: 0,
-    //object's key-value properties pinpointing its location
-    width: 18,
-    height: 12,
-    //values for drawing on canvas
-    x: 50,
-    y: 160,
-    w: 34,
-    h: 24,
-    //bird's radius
-    r: 12,
-    //how much the bird flies per flap()
-    fly: 5.25,
-    //gravity increments the velocity per frame
-    gravity: .32,
-    //velocity = pixels the bird will drop in a frame
-    velocity: 0,
-    //object's render function that utilizes all above values to draw image onto canvas
+
+// 6. OVERLAY STATUS
+let overlayUI = {
     render: function() {
-        let bird = this.animation[this.fr]
-        //bird is centered on x,y position
-        ctx.drawImage(theme2, bird.imgX,bird.imgY,this.width,this.height, this.x-this.w/2,this.y-this.h/2,this.w,this.h)
-    },
-    //bird flies
-    flap: function() {
-        this.velocity = - this.fly
-    },
-    //function checks gameState and updates bird's position
-    position: function() {
+        ctx.textAlign = 'center'
+        let centerX = cvs.width / 2
+        let centerY = cvs.height / 2
+
         if (gameState.current == gameState.getReady) {
-            this.y = 160
-            //bird animation changes every 20 frames
-            if (frame%20 == 0) {
-                this.fr += 1
-            }
-            //when bird animation reaches its last value, reset animation
-            if (this.fr > this.animation.length - 1) {
-                this.fr = 0
-            }
+            ctx.fillStyle = 'rgba(15, 20, 38, 0.7)'
+            ctx.fillRect(centerX - 180, centerY - 90, 360, 50)
+            ctx.strokeStyle = '#f1c40f'
+            ctx.lineWidth = 2
+            ctx.strokeRect(centerX - 180, centerY - 90, 360, 50)
 
-        } else {
-            //bird animation changes every 4 frames
-            if (frame%4 == 0) {
-                this.fr += 1
-            }
-            //when bird animation reaches its last value, reset animation
-            if (this.fr > this.animation.length - 1) {
-                this.fr = 0
-            }
+            ctx.fillStyle = '#f1c40f'
+            ctx.font = 'bold 22px "Courier New", monospace'
+            ctx.fillText('PRESS SPACE TO FLY', centerX, centerY - 58)
+        } else if (gameState.current == gameState.gameOver) {
+            ctx.fillStyle = 'rgba(15, 20, 38, 0.9)'
+            ctx.fillRect(centerX - 190, centerY - 70, 380, 130)
+            ctx.strokeStyle = '#f1c40f'
+            ctx.lineWidth = 3
+            ctx.strokeRect(centerX - 190, centerY - 70, 380, 130)
 
-            //bird falls to gravity
-            this.velocity += this.gravity
-            this.y += this.velocity
+            ctx.fillStyle = '#e74c3c'
+            ctx.font = 'bold 34px "Courier New", monospace'
+            ctx.fillText('KINGDOM FALLEN', centerX, centerY - 18)
 
-            //check collision with ground
-            if (this.y+this.h/2 >= cvs.height-ground.h) {
-                this.y = cvs.height-ground.h - this.h/2
-                //stop flapping when it hits the ground
-                if (frame%1 == 0) {
-                    this.fr = 2
-                }
-                //then the game is over
-                if (gameState.current == gameState.play) {
-                    gameState.current = gameState.gameOver
-                    SFX_FALL.play()
-                }
-            }
-            
-            //bird cannot fly above canvas
-            if (this.y-this.h/2 <= 0) {
-                this.y = this.r
-            }
+            ctx.fillStyle = '#ffffff'
+            ctx.font = 'bold 16px "Courier New", monospace'
+            ctx.fillText('PRESS SPACE / CLICK TO RETRY', centerX, centerY + 30)
+            if (description) description.style.visibility = 'visible'
         }
     }
 }
-//bird2 : BLUE BIRD
-bird2 = {
-    //ANIMATION: bird  //DO THIS STRETCH GOAL
-    animation: [
-        {imgX: 87, imgY: 491},   //  position 0
-        {imgX: 115, imgY: 329},  //  position 1
-        {imgX: 115, imgY: 355},  //  position 2
-        {imgX: 115, imgY: 329}   //  position 1
-    ],
-    fr: 0,
-    //object's key-value properties pinpointing its location
-    //ANIMATION: bird2  //DO THIS STRETCH GOAL
-    imgX: 87,
-    imgY: 491,
-    width: 18,
-    height: 12,
-    //values for drawing on canvas
-    x: 50,
-    y: 160,
-    w: 34,
-    h: 24,
-    //bird's radius
-    r: 12,
-    //how much the bird flies per flap()
-    fly: 5.25,
-    //gravity increments the velocity per frame
-    gravity: .32,
-    //velocity = pixels the bird will drop in a frame
-    velocity: 0,
-    //object's render function that utilizes all above values to draw image onto canvas
-    render: function() {
-        let bird = this.animation[this.fr]
-        //bird is centered on x,y position
-        ctx.drawImage(theme2, bird.imgX,bird.imgY,this.width,this.height, this.x-this.w/2,this.y-this.h/2,this.w,this.h)
-    },
-    //bird flies
-    flap: function() {
-        this.velocity = - this.fly
-    },
-    //function checks gameState and updates bird's position
-    position: function() {
-        if (gameState.current == gameState.getReady) {
-            this.y = 160
-            //bird animation changes every 20 frames
-            if (frame%20 == 0) {
-                this.fr += 1
-            }
-            //when bird animation reaches its last value, reset animation
-            if (this.fr > this.animation.length - 1) {
-                this.fr = 0
-            }
 
-        } else {
-            //bird animation changes every 4 frames
-            if (frame%4 == 0) {
-                this.fr += 1
-            }
-            //when bird animation reaches its last value, reset animation
-            if (this.fr > this.animation.length - 1) {
-                this.fr = 0
-            }
-
-            //bird falls to gravity
-            this.velocity += this.gravity
-            this.y += this.velocity
-
-            //check collision with ground
-            if (this.y+this.h/2 >= cvs.height-ground.h) {
-                this.y = cvs.height-ground.h - this.h/2
-                //stop flapping when it hits the ground
-                if (frame%1 == 0) {
-                    this.fr = 2
-                }
-                //then the game is over
-                if (gameState.current == gameState.play) {
-                    gameState.current = gameState.gameOver
-                    SFX_FALL.play()
-                }
-            }
-            
-            //bird cannot fly above canvas
-            if (this.y-this.h/2 <= 0) {
-                this.y = this.r
-            }
-        }
-    }
-}
-//get ready screen
-getReady = {
-    //object's key-value properties pinpointing its location
-    imgX: 0,
-    imgY: 228,
-    width: 174,
-    height: 160,
-    //values for drawing on canvas
-    x: cvs.width/2 - 174/2,
-    y: cvs.height/2 - 160,
-    w: 174,
-    h: 160,
-    //object's render function that utilizes all above values to draw image onto canvas
-    render: function() {
-        //only draw this if the game state is on get ready
-        if (gameState.current == gameState.getReady) {    
-            ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x,this.y,this.w,this.h)
-        }
-    }
-}
-//game over screen
-gameOver = {
-    //object's key-value properties pinpointing its location
-    imgX: 174,
-    imgY: 228,
-    width: 226,
-    height: 158,
-    //values for drawing on canvas
-    x: cvs.width/2 - 226/2,
-    y: cvs.height/2 - 160,
-    w: 226,
-    h:160,
-    //object's render function that utilizes all above values to draw image onto canvas
-    render: function() {
-        //only draw this if the game state is on game over
-        if (gameState.current == gameState.gameOver) {
-            ctx.drawImage(theme1, this.imgX,this.imgY,this.width,this.height, this.x,this.y,this.w,this.h)
-            description.style.visibility = "visible"
-        }
-    }
-}
 /************************
-***** FUNCTIONS: ********
+***** GAME LOOP: ********
 ************************/
-//anything to be drawn on canvas goes in here
 let draw = () => {
-    //this clears canvas to default bg color
-    ctx.fillStyle = '#00bbc4'
-    ctx.fillRect(0,0, cvs.width,cvs.height)
-    //things to draw
     bg.render()
     pipes.render()
     ground.render()
+    dragon.render()
     score.render()
-    bird.render()
-    getReady.render()
-    gameOver.render()
+    overlayUI.render()
+    startButton.render()
 }
-//updates on animation and position goes in here
+
 let update = () => {
-    //things to update
-    bird.position()
+    dragon.position()
     bg.position()
     pipes.position()
     ground.position()
 }
-//game looper
+
 let loop = () => {
     draw()
     update()
     frame++
-    //average of requestAnimationFrame is 50-60fps
-    // requestAnimationFrame(loop)
 }
-loop()
 setInterval(loop, 17)
 
 /*************************
 ***** EVENT HANDLERS ***** 
 *************************/
-//on mouse click // tap screen
-cvs.addEventListener('click', () => {
-    //if ready screen >> go to play state
+function handleAction() {
     if (gameState.current == gameState.getReady) {
         gameState.current = gameState.play
     }
-    //if play state >> bird keeps flying
     if (gameState.current == gameState.play) {
-        bird.flap()
+        dragon.flap()
         SFX_FLAP.play()
-        description.style.visibility = "hidden"
-    }
-    //if game over screen >> go to ready screen
-    if (gameState.current == gameState.gameOver) {
+        if (description) description.style.visibility = 'hidden'
+    } else if (gameState.current == gameState.gameOver) {
         pipes.reset()
         score.reset()
         gameState.current = gameState.getReady
         SFX_SWOOSH.play()
     }
+}
+
+cvs.addEventListener('mousemove', (e) => {
+    if (gameState.current !== gameState.startScreen) {
+        cvs.style.cursor = 'default'
+        return
+    }
+    let rect = cvs.getBoundingClientRect()
+    let mouseX = e.clientX - rect.left
+    let mouseY = e.clientY - rect.top
+
+    let bx = startButton.getX()
+    let by = startButton.getY()
+
+    if (mouseX >= bx && mouseX <= bx + startButton.w &&
+        mouseY >= by && mouseY <= by + startButton.h) {
+        cvs.style.cursor = 'pointer'
+    } else {
+        cvs.style.cursor = 'default'
+    }
 })
-//on spacebar
-document.body.addEventListener('keydown', (e) => {
-    //if ready screen >> go to play state
-    if (e.keyCode == 32) {
-        if (gameState.current == gameState.getReady) {
-            gameState.current = gameState.play
-        }
-        //if play state >> bird keeps flying
-        if (gameState.current == gameState.play) {
-            bird.flap()
-            SFX_FLAP.play()
-            description.style.visibility = "hidden"
-        }
-        //if game over screen >> go to ready screen
-        if (gameState.current == gameState.gameOver) {
-            pipes.reset()
-            score.reset()
-            SFX_SWOOSH.play()
+
+cvs.addEventListener('click', (e) => {
+    if (gameState.current == gameState.startScreen) {
+        let rect = cvs.getBoundingClientRect()
+        let clickX = e.clientX - rect.left
+        let clickY = e.clientY - rect.top
+
+        let bx = startButton.getX()
+        let by = startButton.getY()
+
+        if (clickX >= bx && clickX <= bx + startButton.w &&
+            clickY >= by && clickY <= by + startButton.h) {
             gameState.current = gameState.getReady
+            cvs.style.cursor = 'default'
+            SFX_SWOOSH.play()
         }
+        return
+    }
+
+    handleAction()
+})
+
+document.body.addEventListener('keydown', (e) => {
+    if (gameState.current == gameState.startScreen) return
+
+    if (e.code === 'Space' || e.code === 'ArrowUp' || e.keyCode === 32 || e.keyCode === 38) {
+        e.preventDefault()
+        handleAction()
     }
 })
