@@ -75,57 +75,145 @@ let gameState = {
     watchingAd: 4
 }
 
-// Simulasi Layar Iklan (3 Detik)
+// Pemutar Video Iklan Asli (.mp4) + Tombol Link Instagram
 let adScreen = {
-    timer: 0,
-    duration: 180, // ~3 detik (180 frame x 17ms)
+    video: document.createElement('video'),
+    instagramUrl: 'https://www.instagram.com/omtoro.premiumfood?lqvp=MW8yaTRleG9oeHQzeA==', 
+    init: function() {
+        this.video.src = 'VID-20261125-WA0016.mp4'
+        this.video.playsInline = true
+        this.video.preload = 'auto'
 
-    start: function() {
-        this.timer = this.duration
-        gameState.current = gameState.watchingAd
-    },
+        this.video.onended = () => {
+            this.finishAd()
+        }
 
-    update: function() {
-        if (gameState.current !== gameState.watchingAd) return
-        this.timer--
-        if (this.timer <= 0) {
-            pipes.reset()
-            dragon.y = cvs.height * 0.45
-            dragon.velocity = 0
-            dragon.rotation = 0
-            gameState.current = gameState.getReady
-            SFX_SWOOSH.play()
+        this.video.onerror = () => {
+            console.warn('Video iklan gagal dimuat, melanjutkan permainan...')
+            this.finishAd()
         }
     },
+
+    // Area tombol Instagram di bagian bawah tengah layar iklan
+    getIgButtonRect: function() {
+        let w = 290
+        let h = 48
+        return {
+            x: cvs.width / 2 - w / 2,
+            y: cvs.height - 95,
+            w: w,
+            h: h
+        }
+    },
+
+    isInsideIgButton: function(mx, my) {
+        let btn = this.getIgButtonRect()
+        return mx >= btn.x && mx <= btn.x + btn.w &&
+               my >= btn.y && my <= btn.y + btn.h
+    },
+
+    start: function() {
+        gameState.current = gameState.watchingAd
+
+        if (description) description.style.display = 'none'
+        let gameTitle = document.querySelector('h1, .title, #title')
+        if (gameTitle) gameTitle.style.display = 'none'
+
+        this.video.currentTime = 0
+        this.video.play().catch((err) => {
+            console.warn('Autoplay diblokir browser:', err)
+            this.finishAd()
+        })
+    },
+
+    finishAd: function() {
+        this.video.pause()
+
+        if (description) {
+            description.style.display = 'block'
+            description.style.visibility = 'visible'
+        }
+        let gameTitle = document.querySelector('h1, .title, #title')
+        if (gameTitle) gameTitle.style.display = 'block'
+
+        pipes.reset()
+        dragon.y = cvs.height * 0.45
+        dragon.velocity = 0
+        dragon.rotation = 0
+        gameState.current = gameState.getReady
+        SFX_SWOOSH.play()
+    },
+
+    update: function() {},
 
     render: function() {
         if (gameState.current !== gameState.watchingAd) return
 
-        let centerX = cvs.width / 2
-        let centerY = cvs.height / 2
-        let secondsLeft = Math.ceil(this.timer / 60)
-
-        ctx.fillStyle = 'rgba(10, 12, 22, 0.95)'
+        // Latar belakang hitam
+        ctx.fillStyle = '#000000'
         ctx.fillRect(0, 0, cvs.width, cvs.height)
 
+        // Gambar frame video secara proporsional
+        if (this.video.readyState >= 2) {
+            let vidRatio = this.video.videoWidth / this.video.videoHeight
+            let cvsRatio = cvs.width / cvs.height
+            let drawW, drawH, drawX, drawY
+
+            if (cvsRatio > vidRatio) {
+                drawH = cvs.height
+                drawW = drawH * vidRatio
+                drawX = (cvs.width - drawW) / 2
+                drawY = 0
+            } else {
+                drawW = cvs.width
+                drawH = drawW / vidRatio
+                drawX = 0
+                drawY = (cvs.height - drawH) / 2
+            }
+
+            ctx.drawImage(this.video, drawX, drawY, drawW, drawH)
+        }
+
+        // Info sisa detik di pojok kanan atas
+        let remaining = Math.max(0, Math.ceil(this.video.duration - this.video.currentTime)) || 0
+        ctx.fillStyle = 'rgba(15, 20, 38, 0.85)'
+        ctx.fillRect(cvs.width - 230, 15, 210, 36)
         ctx.strokeStyle = '#f1c40f'
-        ctx.lineWidth = 3
-        ctx.strokeRect(centerX - 210, centerY - 90, 420, 180)
+        ctx.lineWidth = 2
+        ctx.strokeRect(cvs.width - 230, 15, 210, 36)
 
-        ctx.textAlign = 'center'
         ctx.fillStyle = '#f1c40f'
-        ctx.font = 'bold 24px "Courier New", monospace'
-        ctx.fillText('SPONSORED ROYAL AD', centerX, centerY - 35)
+        ctx.font = 'bold 14px "Courier New", monospace'
+        ctx.textAlign = 'center'
+        ctx.fillText('IKLAN SELESAI: ' + remaining + 'd', cvs.width - 125, 38)
 
-        ctx.fillStyle = '#ecf0f1'
+        // --- TOMBOL LINK INSTAGRAM ---
+        let btn = this.getIgButtonRect()
+
+        // Gradasi warna khas Instagram
+        let igGrad = ctx.createLinearGradient(btn.x, btn.y, btn.x + btn.w, btn.y)
+        igGrad.addColorStop(0, '#833ab4')
+        igGrad.addColorStop(0.5, '#fd1d1d')
+        igGrad.addColorStop(1, '#fcb045')
+
+        ctx.fillStyle = igGrad
+        ctx.fillRect(btn.x, btn.y, btn.w, btn.h)
+
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineWidth = 2.5
+        ctx.strokeRect(btn.x, btn.y, btn.w, btn.h)
+
+        ctx.save()
+        ctx.fillStyle = '#ffffff'
         ctx.font = 'bold 16px "Courier New", monospace'
-        ctx.fillText('Memulihkan Naga Kerajaan...', centerX, centerY + 5)
-
-        ctx.fillStyle = '#2ecc71'
-        ctx.font = 'bold 20px "Courier New", monospace'
-        ctx.fillText('Lanjut dalam ' + secondsLeft + ' detik...', centerX, centerY + 48)
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillText('KUNJUNGI INSTAGRAM ↗', btn.x + btn.w / 2, btn.y + btn.h / 2)
+        ctx.restore()
     }
 }
+
+adScreen.init()
 
 // Tombol Interaktif pada Layar GAME OVER
 let gameOverButtons = {
@@ -988,7 +1076,6 @@ let dragon = {
         }
     }
 }
-
 // 6. OVERLAY STATUS
 let overlayUI = {
     render: function() {
@@ -1064,6 +1151,9 @@ setInterval(loop, 17)
 /*************************
 ***** EVENT HANDLERS *****
 *************************/
+/*************************
+***** EVENT HANDLERS *****
+*************************/
 function handleAction() {
     unlockAllAudio()
     if (gameState.current == gameState.getReady) {
@@ -1073,15 +1163,15 @@ function handleAction() {
         dragon.flap()
         playSFX(SFX_FLAP)
         if (description) description.style.visibility = 'hidden'
-    } else if (gameState.current == gameState.gameOver) {
-        pipes.reset()
-        score.reset()
-        gameState.current = gameState.getReady
-        playSFX(SFX_SWOOSH)
+
+        // Sembunyikan tulisan DRACOFLY saat game mulai
+        document.querySelectorAll('h1, .title, #title, .logo, #logo').forEach(el => {
+            el.style.display = 'none'
+        })
     }
 }
 
-// Efek hover pointer untuk tombol START maupun tombol GAME OVER
+// Efek hover pointer untuk tombol START, GAME OVER, maupun tombol INSTAGRAM
 cvs.addEventListener('mousemove', (e) => {
     let rect = cvs.getBoundingClientRect()
     let mouseX = e.clientX - rect.left
@@ -1097,6 +1187,9 @@ cvs.addEventListener('mousemove', (e) => {
         let overRetry = score.lives > 0 && gameOverButtons.isInside(mouseX, mouseY, gameOverButtons.getRetryRect())
         let overHome = gameOverButtons.isInside(mouseX, mouseY, gameOverButtons.getHomeRect())
         cvs.style.cursor = (overRetry || overHome) ? 'pointer' : 'default'
+    } else if (gameState.current === gameState.watchingAd) {
+        // Ubah kursor jadi pointer saat diarahkan ke tombol Instagram
+        cvs.style.cursor = adScreen.isInsideIgButton(mouseX, mouseY) ? 'pointer' : 'default'
     } else {
         cvs.style.cursor = 'default'
     }
@@ -1107,7 +1200,15 @@ cvs.addEventListener('click', (e) => {
     let clickX = e.clientX - rect.left
     let clickY = e.clientY - rect.top
 
-    // 1. Layar Main Menu
+    // 1. Layar Iklan (Cek apakah tombol Instagram diklik)
+    if (gameState.current == gameState.watchingAd) {
+        if (adScreen.isInsideIgButton(clickX, clickY)) {
+            window.open(adScreen.instagramUrl, '_blank', 'noopener,noreferrer')
+        }
+        return
+    }
+
+    // 2. Layar Main Menu
     if (gameState.current == gameState.startScreen) {
         let bx = startButton.getX()
         let by = startButton.getY()
@@ -1115,6 +1216,8 @@ cvs.addEventListener('click', (e) => {
         if (clickX >= bx && clickX <= bx + startButton.w &&
             clickY >= by && clickY <= by + startButton.h) {
             unlockAllAudio()
+            score.reset()
+            pipes.reset()
             gameState.current = gameState.getReady
             cvs.style.cursor = 'default'
             playSFX(SFX_SWOOSH)
@@ -1122,7 +1225,7 @@ cvs.addEventListener('click', (e) => {
         return
     }
 
-    // 2. Layar Game Over (Pilih Retry Nonton Iklan atau Kembali ke Home)
+    // 3. Layar Game Over (Pilih Continue Nonton Iklan atau Kembali ke Home)
     if (gameState.current == gameState.gameOver) {
         if (score.lives > 0 && gameOverButtons.isInside(clickX, clickY, gameOverButtons.getRetryRect())) {
             cvs.style.cursor = 'default'
@@ -1130,18 +1233,22 @@ cvs.addEventListener('click', (e) => {
             return
         }
 
-        if (gameOverButtons.isInside(clickX, clickY, gameOverButtons.getHomeRect())) {
+         if (gameOverButtons.isInside(clickX, clickY, gameOverButtons.getHomeRect())) {
             pipes.reset()
             score.reset()
             cvs.style.cursor = 'default'
             gameState.current = gameState.startScreen
-            SFX_SWOOSH.play()
+            playSFX(SFX_SWOOSH)
+
+            // Munculkan kembali tulisan DRACOFLY saat kembali ke Home
+            document.querySelectorAll('h1, .title, #title, .logo, #logo').forEach(el => {
+                el.style.display = 'block'
+            })
             return
         }
-        return
+       return
     }
-
-    // 3. Saat GetReady / Play
+    // 4. Saat GetReady / Play
     handleAction()
 })
 
