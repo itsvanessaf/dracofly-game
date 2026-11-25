@@ -21,6 +21,42 @@ const SFX_FLAP = new Audio('audio/sfx_wing.wav')
 const SFX_COLLISION = new Audio('audio/sfx_hit.wav')
 const SFX_FALL = new Audio('audio/sfx_die.wav')
 const SFX_SWOOSH = new Audio('audio/sfx_swooshing.wav')
+
+// Seimbangkan volume agar suara kepakan tidak menutupi suara hit & die
+SFX_FLAP.volume = 0.45
+SFX_COLLISION.volume = 1.0
+SFX_FALL.volume = 1.0
+SFX_SCORE.volume = 0.8
+SFX_SWOOSH.volume = 0.8
+
+const ALL_SFX = [SFX_SCORE, SFX_FLAP, SFX_COLLISION, SFX_FALL, SFX_SWOOSH]
+let audioUnlocked = false
+
+// Unlock seluruh objek audio pada klik/tombol pertama pemain
+function unlockAllAudio() {
+    if (audioUnlocked) return
+    audioUnlocked = true
+    ALL_SFX.forEach((sfx) => {
+        sfx.muted = true
+        sfx.play().then(() => {
+            sfx.pause()
+            sfx.currentTime = 0
+            sfx.muted = false
+        }).catch(() => {
+            sfx.muted = false
+        })
+    })
+}
+
+// Helper pemutar SFX agar selalu mulai dari detik 0 & terdeteksi jika gagal
+function playSFX(sfx) {
+    sfx.muted = false
+    sfx.currentTime = 0
+    sfx.play().catch((err) => {
+        console.warn('Gagal memutar SFX:', sfx.src, err)
+    })
+}
+
 const DRAGON_FLY_SHEET = new Image()
 DRAGON_FLY_SHEET.src = 'img/fly_10f_sheet.png'
 
@@ -565,7 +601,7 @@ let pipes = {
                 score.current++
                 score.coins += 2
                 score.updateBest()
-                SFX_SCORE.play()
+                playSFX(SFX_SCORE)
             }
 
             if (pg.x < -this.w - 30) {
@@ -582,7 +618,7 @@ let pipes = {
             if (dRight > pg.x + 4 && dLeft < pg.x + this.w - 4) {
                 if (dTop < pg.gapY + 8 || dBottom > pg.gapY + this.gap - 8) {
                     score.loseLife()
-                    SFX_COLLISION.play()
+                    playSFX(SFX_COLLISION)
                     return
                 }
             }
@@ -605,7 +641,7 @@ let pipes = {
             let dist = Math.sqrt(dx * dx + dy * dy)
             if (dist < dragon.r + cb.r - 2) {
                 score.loseLife()
-                SFX_COLLISION.play()
+                playSFX(SFX_COLLISION)
                 return
             }
         }
@@ -940,7 +976,7 @@ let dragon = {
                 this.y = groundY - this.r
                 if (gameState.current == gameState.play) {
                     score.loseLife()
-                    SFX_FALL.play()
+                    playSFX(SFX_FALL)
                 }
             }
 
@@ -1029,13 +1065,19 @@ setInterval(loop, 17)
 ***** EVENT HANDLERS *****
 *************************/
 function handleAction() {
+    unlockAllAudio()
     if (gameState.current == gameState.getReady) {
         gameState.current = gameState.play
     }
     if (gameState.current == gameState.play) {
         dragon.flap()
-        SFX_FLAP.play()
+        playSFX(SFX_FLAP)
         if (description) description.style.visibility = 'hidden'
+    } else if (gameState.current == gameState.gameOver) {
+        pipes.reset()
+        score.reset()
+        gameState.current = gameState.getReady
+        playSFX(SFX_SWOOSH)
     }
 }
 
@@ -1072,11 +1114,10 @@ cvs.addEventListener('click', (e) => {
 
         if (clickX >= bx && clickX <= bx + startButton.w &&
             clickY >= by && clickY <= by + startButton.h) {
-            score.reset()
-            pipes.reset()
+            unlockAllAudio()
             gameState.current = gameState.getReady
             cvs.style.cursor = 'default'
-            SFX_SWOOSH.play()
+            playSFX(SFX_SWOOSH)
         }
         return
     }
