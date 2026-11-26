@@ -761,7 +761,6 @@ let pipes = {
             if (!pg.passed && pg.x + this.w < dragon.x) {
                 pg.passed = true
                 score.current++
-                score.coins += 2
                 score.updateBest()
                 playSFX(SFX_SCORE)
             }
@@ -895,34 +894,56 @@ let ground = {
         }
 
         // Panel Kontrol Bawah Kerajaan
-        ctx.fillStyle = '#1e272e'
-        ctx.fillRect(0, barY, cvs.width, getBottomBarHeight())
-        ctx.strokeStyle = '#f1c40f'
-        ctx.lineWidth = 2
-        ctx.beginPath()
-        ctx.moveTo(0, barY); ctx.lineTo(cvs.width, barY)
-        ctx.stroke()
+        // 1. Background & garis pembatas atas
+        ctx.fillStyle = '#1e272e';
+        ctx.fillRect(0, barY, cvs.width, getBottomBarHeight());
+        
+        ctx.strokeStyle = '#f1c40f';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, barY);
+        ctx.lineTo(cvs.width, barY);
+        ctx.stroke();
 
-        ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 16px "Courier New", monospace'
-        ctx.textAlign = 'center'
-        ctx.fillText('[PRESS SPACE TO FLY]', cvs.width * 0.40, barY + 30)
+        // Pengaturan font global untuk bar bawah
+        ctx.font = 'bold 15px "Courier New", monospace';
 
-        let btnX = cvs.width * 0.62
-        ctx.fillStyle = '#2f3640'
-        ctx.fillRect(btnX, barY + 13, 22, 22)
-        ctx.strokeStyle = '#f1c40f'
-        ctx.strokeRect(btnX, barY + 13, 22, 22)
-        ctx.fillStyle = '#f1c40f'
-        ctx.beginPath()
-        ctx.moveTo(btnX + 11, barY + 18)
-        ctx.lineTo(btnX + 6, barY + 27)
-        ctx.lineTo(btnX + 16, barY + 27)
-        ctx.fill()
+        // 2. Kolom Kiri: [PRESS SPACE TO FLY]
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText('[PRESS SPACE TO FLY]', 24, barY + 30);
 
-        ctx.fillStyle = '#ffffff'
-        ctx.textAlign = 'left'
-        ctx.fillText('[ARROW UP TO FLY]', btnX + 32, barY + 30)
+        // 3. Kolom Tengah: Ikon Panah Atas + [PRESS ARROW UP TO FLY]
+        const arrowText = '[PRESS ARROW UP TO FLY]';
+        const iconSize = 22;
+        const gap = 8;
+        const textWidth = ctx.measureText(arrowText).width;
+        const totalCenterWidth = iconSize + gap + textWidth;
+        
+        // Menghitung posisi agar gabungan ikon & teks pas di tengah canvas
+        const btnX = (cvs.width - totalCenterWidth) / 2;
+
+        ctx.fillStyle = '#2f3640';
+        ctx.fillRect(btnX, barY + 13, iconSize, iconSize);
+        ctx.strokeStyle = '#f1c40f';
+        ctx.strokeRect(btnX, barY + 13, iconSize, iconSize);
+
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        ctx.moveTo(btnX + 11, barY + 18);
+        ctx.lineTo(btnX + 6, barY + 27);
+        ctx.lineTo(btnX + 16, barY + 27);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.fillText(arrowText, btnX + iconSize + gap, barY + 30);
+
+        // 4. Kolom Kanan: [PRESS CLICK TO PLAY]
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'right';
+        ctx.fillText('[PRESS CLICK TO PLAY]', cvs.width - 24, barY + 30);
     },
 
     position: function() {
@@ -936,13 +957,11 @@ let ground = {
 let score = {
     current: 0,
     best: parseInt(localStorage.getItem('royalDragonHighScore')) || 0,
-    coins: 0,
     lives: 2,
     maxLives: 2,
 
     reset: function() {
         this.current = 0
-        this.coins = 0
         this.lives = this.maxLives
     },
 
@@ -1000,18 +1019,6 @@ let score = {
         ctx.fillStyle = '#ffffff'
         ctx.font = 'bold 12px "Courier New", monospace'
         ctx.fillText('LIVES: ' + this.lives + '/' + this.maxLives, 156, 51)
-
-        // Koin Emas Kerajaan
-        ctx.fillStyle = '#f1c40f'
-        ctx.beginPath()
-        ctx.arc(cvs.width - 138, 15, 8, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.strokeStyle = '#b7950b'
-        ctx.stroke()
-
-        ctx.fillStyle = '#ffffff'
-        ctx.font = 'bold 18px "Courier New", monospace'
-        ctx.textAlign = 'right'
     }
 }
 
@@ -1162,17 +1169,7 @@ let overlayUI = {
         let centerX = cvs.width / 2
         let centerY = cvs.height / 2
 
-        if (gameState.current == gameState.getReady) {
-            ctx.fillStyle = 'rgba(15, 20, 38, 0.7)'
-            ctx.fillRect(centerX - 180, centerY - 90, 360, 50)
-            ctx.strokeStyle = '#f1c40f'
-            ctx.lineWidth = 2
-            ctx.strokeRect(centerX - 180, centerY - 90, 360, 50)
-
-            ctx.fillStyle = '#f1c40f'
-            ctx.font = 'bold 22px "Courier New", monospace'
-            ctx.fillText('PRESS SPACE TO FLY', centerX, centerY - 58)
-        } else if (gameState.current == gameState.gameOver) {
+        if (gameState.current == gameState.gameOver) {
             let boxH = score.lives > 0 ? 225 : 190
             ctx.fillStyle = 'rgba(15, 20, 38, 0.92)'
             ctx.fillRect(centerX - 190, centerY - 105, 380, boxH)
